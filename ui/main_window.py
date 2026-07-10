@@ -41,11 +41,30 @@ class MainWindow(QMainWindow):
     def apply_theme(self):
         self.setStyleSheet(get_theme_stylesheet(self.active_theme))
         
-    def toggle_theme(self):
-        self.active_theme = "light" if self.active_theme == "dark" else "dark"
+    def change_theme(self, theme_key):
+        self.active_theme = theme_key
         config["theme"] = self.active_theme
         save_config(config)
         self.apply_theme()
+        
+        # Refresh the current panel if it has a refresh method (important for charts)
+        try:
+            curr_idx = self.stacked_widget.currentIndex()
+            if 0 <= curr_idx < len(self.panels):
+                active_panel = self.panels[curr_idx]
+                if hasattr(active_panel, "refresh"):
+                    active_panel.refresh()
+        except AttributeError:
+            pass
+        
+    def toggle_theme(self):
+        themes = ["dark", "light", "emerald", "sapphire", "amber"]
+        try:
+            idx = themes.index(self.active_theme.lower())
+            next_idx = (idx + 1) % len(themes)
+            self.change_theme(themes[next_idx])
+        except ValueError:
+            self.change_theme("dark")
         
     def init_ui(self):
         # Central widget and horizontal layout
@@ -109,11 +128,25 @@ class MainWindow(QMainWindow):
         term_label.setStyleSheet("color: #64748b; font-weight: bold; margin-right: 15px;")
         header_layout.addWidget(term_label)
         
-        # Theme toggle button
-        theme_btn = QPushButton("Toggle Theme")
+        # Theme toggle button with drop-down menu
+        theme_btn = QPushButton("Theme ▾")
         theme_btn.setObjectName("secondary_btn")
         theme_btn.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
-        theme_btn.clicked.connect(self.toggle_theme)
+        
+        theme_menu = QMenu(self)
+        themes = [
+            ("Dark Mode", "dark"),
+            ("Light Mode", "light"),
+            ("Forest Emerald", "emerald"),
+            ("Midnight Sapphire", "sapphire"),
+            ("Sunset Amber", "amber")
+        ]
+        for label, theme_key in themes:
+            action = QAction(label, self)
+            action.triggered.connect(lambda checked=False, t=theme_key: self.change_theme(t))
+            theme_menu.addAction(action)
+            
+        theme_btn.setMenu(theme_menu)
         header_layout.addWidget(theme_btn)
         
         # User menu button

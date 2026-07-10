@@ -347,6 +347,11 @@ class AcademicsPanel(QWidget):
         top_bar_layout.addWidget(self.tt_class_combo, stretch=2)
         top_bar_layout.addStretch()
         
+        self.auto_gen_btn = QPushButton("Auto-Generate Timetable")
+        self.auto_gen_btn.setObjectName("secondary_btn")
+        self.auto_gen_btn.clicked.connect(self.auto_generate_timetable)
+        top_bar_layout.addWidget(self.auto_gen_btn)
+        
         tab_layout.addWidget(top_bar)
         
         # Scheduler Grid (9 rows for time slots, 5 columns for days)
@@ -408,8 +413,21 @@ class AcademicsPanel(QWidget):
                     item = QTableWidgetItem(label_text)
                     item.setFlags(Qt.ItemFlag.ItemIsEnabled)
                     item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-                    item.setBackground(QColor("#334155") if config.get("theme", "dark") == "dark" else QColor("#cbd5e1"))
-                    item.setForeground(QColor("#94a3b8") if config.get("theme", "dark") == "dark" else QColor("#475569"))
+                    active_theme = config.get("theme", "dark").lower()
+                    if active_theme == "light":
+                        bg_color, fg_color = "#cbd5e1", "#475569"
+                    else:
+                        fg_color = "#94a3b8"
+                        if active_theme == "emerald":
+                            bg_color = "#14402e"
+                        elif active_theme == "sapphire":
+                            bg_color = "#1e2e4f"
+                        elif active_theme == "amber":
+                            bg_color = "#4a331a"
+                        else:
+                            bg_color = "#334155"
+                    item.setBackground(QColor(bg_color))
+                    item.setForeground(QColor(fg_color))
                     self.tt_table.setItem(row, col, item)
                     
             # Fetch slots
@@ -434,6 +452,188 @@ class AcademicsPanel(QWidget):
                     continue # Ignore mismatches
         except Exception as e:
             print(f"Error loading timetable: {e}")
+        finally:
+            session.close()
+
+    def auto_generate_timetable(self):
+        from PySide6.QtWidgets import QInputDialog
+        import random
+        
+        # 1. Ask for confirmation
+        confirm = QMessageBox.question(
+            self, "Auto-Generate Timetable",
+            "This will clear the current timetable for the active academic year/term and generate a new one based on Teacher-Subject allocations.\n\n"
+            "Are you sure you want to proceed?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
+        if confirm == QMessageBox.StandardButton.No:
+            return
+            
+        # 2. Get sessions per subject count
+        sessions, ok = QInputDialog.getInt(
+            self, "Sessions Per Subject",
+            "Enter weekly sessions per allocated subject (e.g. 3 or 4):",
+            3, 1, 10
+        )
+        if not ok:
+            return
+            
+        session = get_session()
+        try:
+            # Active term ids
+            ay_id = config.get("active_academic_year_id", 1)
+            term_id = config.get("active_term_id", 1)
+            
+            # Fetch all classes, teachers, and allocations
+            classes = session.query(Class).all()
+            allocations = session.query(TeacherSubject).all()
+            
+            if not classes:
+                QMessageBox.warning(self, "Scheduling Error", "No classes defined in the database yet.")
+                return
+                
+            if not allocations:
+                QMessageBox.warning(self, "Scheduling Error", "No Teacher-Subject allocations defined. Please assign teachers to subjects first.")
+                return
+                
+            # Group allocations by class_id
+            class_allocs = {}
+            for alloc in allocations:
+                if alloc.class_id not in class_allocs:
+                    class_allocs[alloc.class_id] = []
+                class_allocs[alloc.class_id].append(alloc)
+                
+            # Define slots and days
+            days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
+            time_slots = [
+                "08:00 - 08:45",
+                "08:45 - 09:30",
+                "09:30 - 10:15",
+                # "10:15 - 10:45 (BREAK)" - skipped
+                "10:45 - 11:30",
+                "11:30 - 12:15",
+                # "12:15 - 13:00 (LUNCH)" - skipped
+                "13:00 - 13:45",
+                "13:45 - 14:30"
+            ]
+            
+            slots_to_schedule = []
+            for d in days:
+                for ts in time_slots:
+                    slots_to_schedule.append((d, ts))
+                    
+            # Setup session trackers
+            remaining_sessions = {}
+            for c in classes:
+                allocs = class_allocs.get(c.id, [])
+                rem = []
+                for a in allocs:
+                    rem.extend([a] * sessions)
+                # Shuffle initially to distribute subjects nicely
+                random.shuffle(rem)
+                remaining_sessions[c.id] = rem
+                
+            generated_slots = []
+            
+            # Bipartite matching solver for each slot using backtracking
+            def schedule_slot(slot_idx):
+                if slot_idx >= len(slots_to_schedule):
+                    return True # Successfully scheduled all slots!
+                    
+                d, ts = slots_to_schedule[slot_idx]
+                
+                # Active classes that still have remaining sessions
+                active_classes = [c.id for c in classes if remaining_sessions[c.id]]
+                if not active_classes:
+                    return True # All class sessions scheduled!
+                    
+                class_order = list(active_classes)
+                
+                def assign_class(class_idx, busy_teachers_slot):
+                    if class_idx >= len(class_order):
+                        return schedule_slot(slot_idx + 1)
+                        
+                    cid = class_order[class_idx]
+                    
+                    # Options for this class
+                    avail_allocs = remaining_sessions[cid]
+                    seen_ids = set()
+                    options = []
+                    for a in avail_allocs:
+                        if a.id not in seen_ids:
+                            options.append(a)
+                            seen_ids.add(a.id)
+                            
+                    # Always include None (free period / study hall) as a fallback option
+                    options.append(None)
+                    random.shuffle(options)
+                    
+                    for opt in options:
+                        if opt is None:
+                            # Assign free period
+                            if assign_class(class_idx + 1, busy_teachers_slot):
+                                return True
+                        else:
+                            # Check teacher availability conflict
+                            if opt.staff_id in busy_teachers_slot:
+                                continue
+                                
+                            # Apply choice
+                            remaining_sessions[cid].remove(opt)
+                            busy_teachers_slot.add(opt.staff_id)
+                            generated_slots.append((cid, opt.subject_id, opt.staff_id, d, ts))
+                            
+                            if assign_class(class_idx + 1, busy_teachers_slot):
+                                return True
+                                
+                            # Revert choice
+                            generated_slots.pop()
+                            busy_teachers_slot.remove(opt.staff_id)
+                            remaining_sessions[cid].append(opt)
+                            
+                    return False
+                    
+                return assign_class(0, set())
+                
+            success = schedule_slot(0)
+            if not success:
+                QMessageBox.critical(self, "Scheduling Error", "The scheduling algorithm was unable to find a conflict-free solution. Please check teacher workloads and allocations.")
+                return
+                
+            # Save to Database:
+            # First delete all existing slots for this year/term
+            session.query(TimetableSlot).filter(
+                TimetableSlot.academic_year_id == ay_id,
+                TimetableSlot.term_id == term_id
+            ).delete()
+            
+            # Save new slots
+            for cid, sub_id, staff_id, d, ts in generated_slots:
+                slot = TimetableSlot(
+                    class_id=cid,
+                    subject_id=sub_id,
+                    staff_id=staff_id,
+                    day_of_week=d,
+                    time_slot=ts,
+                    academic_year_id=ay_id,
+                    term_id=term_id
+                )
+                session.add(slot)
+                
+            session.commit()
+            
+            empty_classes = [c.name for c in classes if c.id not in class_allocs]
+            msg = f"Timetable automatically generated successfully!\nScheduled {len(generated_slots)} active teaching periods.\n"
+            if empty_classes:
+                msg += f"\nNote: The following classes have no Teacher-Subject allocations and were left empty:\n- " + "\n- ".join(empty_classes)
+                msg += "\n\nTo populate them, please assign teachers to subjects first under the 'Teacher Subject Allocation' tab."
+                
+            QMessageBox.information(self, "Success", msg)
+            self.load_timetable()
+            
+        except Exception as e:
+            session.rollback()
+            QMessageBox.critical(self, "Error", f"Failed to auto-generate timetable: {e}")
         finally:
             session.close()
 

@@ -7,6 +7,7 @@ from PySide6.QtCore import Qt, Signal
 from database.connection import get_session
 from database.models import Announcement, SMSLog, Parent
 import datetime
+from config import config
 
 def send_sms(recipient_phone: str, message: str, trigger_type: str) -> bool:
     """
@@ -127,17 +128,21 @@ class CommunicationPanel(QWidget):
                 w_layout.setContentsMargins(10, 10, 10, 10)
                 w_layout.setSpacing(5)
                 
-                # Add background styling to announcements card
+                # Add background styling using theme card component
                 card_frame = QFrame()
-                card_frame.setStyleSheet("background-color: #0f172a; border-radius: 6px; border: 1px solid #1e293b; padding: 10px;")
+                card_frame.setObjectName("card")
+                card_frame.setStyleSheet("padding: 10px;")
                 cf_layout = QVBoxLayout(card_frame)
                 
+                active_theme = config.get("theme", "dark").lower()
+                is_light = active_theme == "light"
+                
                 title_lbl = QLabel(ann.title)
-                title_lbl.setStyleSheet("font-weight: bold; font-size: 14px; color: #f8fafc;")
+                title_lbl.setStyleSheet("font-weight: bold; font-size: 14px; color: #0f172a;" if is_light else "font-weight: bold; font-size: 14px; color: #ffffff;")
                 
                 body_lbl = QLabel(ann.content)
                 body_lbl.setWordWrap(True)
-                body_lbl.setStyleSheet("color: #94a3b8; font-size: 12px; margin-top: 5px;")
+                body_lbl.setStyleSheet("color: #334155; font-size: 12px; margin-top: 5px;" if is_light else "color: #94a3b8; font-size: 12px; margin-top: 5px;")
                 
                 info_lbl = QLabel(f"Target Group: {ann.target_audience} | Published: {ann.created_at.strftime('%Y-%m-%d %H:%M')}")
                 info_lbl.setStyleSheet("color: #64748b; font-size: 10px;")

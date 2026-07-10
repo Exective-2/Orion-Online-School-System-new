@@ -43,6 +43,11 @@ class SettingsPanel(QWidget):
             self.backup_tab = QWidget()
             self.init_backup_tab()
             self.tabs.addTab(self.backup_tab, "Backup & Recovery")
+            
+            # 3. Grading Scale Tab
+            self.grading_tab = QWidget()
+            self.init_grading_tab()
+            self.tabs.addTab(self.grading_tab, "Grading Scale")
         
         # 3. User Account Tab
         self.account_tab = QWidget()
@@ -475,4 +480,115 @@ class SettingsPanel(QWidget):
             self.load_branding_data()
         if hasattr(self, 'auto_backup_dir_input'):
             self.load_auto_backup_settings()
+        if hasattr(self, 'grading_table'):
+            self.load_grading_scale_table()
         self.load_account_data()
+
+    def init_grading_tab(self):
+        tab_layout = QVBoxLayout(self.grading_tab)
+        tab_layout.setContentsMargins(15, 15, 15, 15)
+        tab_layout.setSpacing(15)
+        
+        info_lbl = QLabel(
+            "Define the school's grading system. The system maps the calculated total score (Class + Exam) "
+            "to a grade based on the Minimum Score Threshold. Set rules in descending order for correct calculation."
+        )
+        info_lbl.setWordWrap(True)
+        info_lbl.setStyleSheet("color: #64748b; font-size: 12px;")
+        tab_layout.addWidget(info_lbl)
+        
+        # Grading Table
+        from PySide6.QtWidgets import QTableWidget, QTableWidgetItem, QHeaderView
+        self.grading_table = QTableWidget()
+        self.grading_table.setColumnCount(3)
+        self.grading_table.setHorizontalHeaderLabels(["Grade (e.g. 1 or A)", "Min Score Threshold (0 - 100)", "Official Remark (e.g. Excellent)"])
+        self.grading_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        tab_layout.addWidget(self.grading_table)
+        
+        # Load existing data
+        self.load_grading_scale_table()
+        
+        # Action Buttons Layout
+        btn_layout = QHBoxLayout()
+        
+        add_btn = QPushButton("Add New Rule")
+        add_btn.setObjectName("secondary_btn")
+        add_btn.clicked.connect(self.add_grading_rule)
+        btn_layout.addWidget(add_btn)
+        
+        delete_btn = QPushButton("Delete Selected Rule")
+        delete_btn.setObjectName("secondary_btn")
+        delete_btn.clicked.connect(self.delete_grading_rule)
+        btn_layout.addWidget(delete_btn)
+        
+        save_btn = QPushButton("Save Grading Scale")
+        save_btn.setObjectName("primary_btn")
+        save_btn.clicked.connect(self.save_grading_scale)
+        btn_layout.addWidget(save_btn)
+        
+        btn_layout.addStretch()
+        tab_layout.addLayout(btn_layout)
+        
+    def load_grading_scale_table(self):
+        scale = config.get("grading_scale", [])
+        # Sort by min_score descending
+        sorted_scale = sorted(scale, key=lambda x: x.get("min_score", 0.0), reverse=True)
+        
+        self.grading_table.setRowCount(len(sorted_scale))
+        for r, item in enumerate(sorted_scale):
+            self.grading_table.setItem(r, 0, QTableWidgetItem(str(item.get("grade", ""))))
+            self.grading_table.setItem(r, 1, QTableWidgetItem(f"{item.get('min_score', 0.0):.1f}"))
+            self.grading_table.setItem(r, 2, QTableWidgetItem(str(item.get("remark", ""))))
+            
+    def add_grading_rule(self):
+        row = self.grading_table.rowCount()
+        self.grading_table.insertRow(row)
+        from PySide6.QtWidgets import QTableWidgetItem
+        self.grading_table.setItem(row, 0, QTableWidgetItem(""))
+        self.grading_table.setItem(row, 1, QTableWidgetItem("0.0"))
+        self.grading_table.setItem(row, 2, QTableWidgetItem(""))
+        
+    def delete_grading_rule(self):
+        selected = self.grading_table.selectedRanges()
+        if not selected:
+            QMessageBox.warning(self, "Selection Required", "Please select the row you want to delete.")
+            return
+        row = selected[0].topRow()
+        self.grading_table.removeRow(row)
+        
+    def save_grading_scale(self):
+        scale = []
+        for r in range(self.grading_table.rowCount()):
+            grade_item = self.grading_table.item(r, 0)
+            score_item = self.grading_table.item(r, 1)
+            remark_item = self.grading_table.item(r, 2)
+            
+            grade_str = grade_item.text().strip() if grade_item else ""
+            score_str = score_item.text().strip() if score_item else "0.0"
+            remark_str = remark_item.text().strip() if remark_item else ""
+            
+            if not grade_str:
+                QMessageBox.warning(self, "Validation Error", f"Row {r+1}: Grade field cannot be empty.")
+                return
+                
+            try:
+                min_score = float(score_str)
+                if min_score < 0 or min_score > 100:
+                    raise ValueError()
+            except ValueError:
+                QMessageBox.warning(self, "Validation Error", f"Row {r+1}: Minimum score must be a number between 0 and 100.")
+                return
+                
+            scale.append({
+                "grade": grade_str,
+                "min_score": min_score,
+                "remark": remark_str
+            })
+            
+        # Update config and save
+        config["grading_scale"] = scale
+        if save_config(config):
+            QMessageBox.information(self, "Success", "School grading system configuration saved successfully!")
+            self.load_grading_scale_table()
+        else:
+            QMessageBox.critical(self, "Error", "Failed to write grading scale configurations to file.")

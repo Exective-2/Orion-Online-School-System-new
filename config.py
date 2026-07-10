@@ -3,7 +3,12 @@ import json
 from pathlib import Path
 
 # Paths
-BASE_DIR = Path(__file__).resolve().parent
+import sys
+if getattr(sys, 'frozen', False):
+    BASE_DIR = Path(sys.executable).resolve().parent
+else:
+    BASE_DIR = Path(__file__).resolve().parent
+
 DATABASE_PATH = BASE_DIR / "school_management.db"
 
 # Default configs
@@ -31,6 +36,17 @@ DEFAULT_CONFIG = {
     "auto_backup_monthly": False,
     "backup_directory": "",
     "last_monthly_backup_date": "",
+    "grading_scale": [
+        {"grade": "1", "min_score": 80.0, "remark": "Excellent"},
+        {"grade": "2", "min_score": 70.0, "remark": "Very Good"},
+        {"grade": "3", "min_score": 65.0, "remark": "Good"},
+        {"grade": "4", "min_score": 60.0, "remark": "High Average"},
+        {"grade": "5", "min_score": 55.0, "remark": "Average"},
+        {"grade": "6", "min_score": 50.0, "remark": "Low Average"},
+        {"grade": "7", "min_score": 45.0, "remark": "Low"},
+        {"grade": "8", "min_score": 40.0, "remark": "Lower"},
+        {"grade": "9", "min_score": 0.0, "remark": "Lowest"}
+    ]
 }
 
 CONFIG_FILE = BASE_DIR / "config.json"

@@ -19,12 +19,28 @@ class OrionSplashScreen(QSplashScreen):
         self.frame.setGeometry(0, 0, 500, 320)
         
         # Theme-aware stylesheet
-        is_dark = config.get("theme", "dark") == "dark"
-        if is_dark:
-            bg_color = "rgba(15, 23, 42, 0.95)" # slate-900
-            border_color = "rgba(51, 65, 85, 0.5)" # slate-700
+        active_theme = config.get("theme", "dark").lower()
+        is_dark = active_theme != "light"
+        if active_theme == "emerald":
+            bg_color = "rgba(5, 20, 15, 0.95)"
+            border_color = "rgba(20, 64, 46, 0.5)"
             text_color = "#f8fafc"
-            accent_color = "#3b82f6" # blue-500
+            accent_color = "#10b981"
+        elif active_theme == "sapphire":
+            bg_color = "rgba(6, 11, 19, 0.95)"
+            border_color = "rgba(30, 46, 79, 0.5)"
+            text_color = "#f8fafc"
+            accent_color = "#3b82f6"
+        elif active_theme == "amber":
+            bg_color = "rgba(21, 15, 7, 0.95)"
+            border_color = "rgba(74, 51, 26, 0.5)"
+            text_color = "#f8fafc"
+            accent_color = "#f59e0b"
+        elif is_dark:
+            bg_color = "rgba(15, 23, 42, 0.95)"
+            border_color = "rgba(51, 65, 85, 0.5)"
+            text_color = "#f8fafc"
+            accent_color = "#3b82f6"
         else:
             bg_color = "rgba(255, 255, 255, 0.98)"
             border_color = "rgba(226, 232, 240, 0.8)"

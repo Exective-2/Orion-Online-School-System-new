@@ -292,7 +292,8 @@ class FeesPanel(QWidget):
         
         # Summary KPI Boxes
         summary_frame = QFrame()
-        summary_frame.setStyleSheet("background-color: #0f172a; border-radius: 6px; border: 1px solid #1e293b; padding: 10px;")
+        summary_frame.setObjectName("card")
+        summary_frame.setStyleSheet("padding: 10px;")
         summary_layout = QHBoxLayout(summary_frame)
         
         # Rev

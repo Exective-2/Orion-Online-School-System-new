@@ -235,8 +235,16 @@ class ExamsPanel(QWidget):
             self.averages_figure.clear()
             ax1 = self.averages_figure.add_subplot(111)
             
-            is_dark = config.get("theme", "dark") == "dark"
+            active_theme = config.get("theme", "dark").lower()
+            is_dark = active_theme != "light"
             bg_color = '#1e293b' if is_dark else '#f8fafc'
+            if active_theme == "emerald":
+                bg_color = '#0d291e'
+            elif active_theme == "sapphire":
+                bg_color = '#111a2e'
+            elif active_theme == "amber":
+                bg_color = '#2c1e10'
+                
             text_color = '#f8fafc' if is_dark else '#1e293b'
             grid_color = '#475569' if is_dark else '#e2e8f0'
             
@@ -330,16 +338,20 @@ class ExamsPanel(QWidget):
         self.table.setRowCount(0)
         
     def get_ges_grade(self, total):
-        # Ghana Education Service default 9-point scale
-        if total >= 80: return "1"
-        elif total >= 70: return "2"
-        elif total >= 65: return "3"
-        elif total >= 60: return "4"
-        elif total >= 55: return "5"
-        elif total >= 50: return "6"
-        elif total >= 45: return "7"
-        elif total >= 40: return "8"
-        else: return "9"
+        scale = config.get("grading_scale", [])
+        # Sort scale descending by min_score
+        sorted_scale = sorted(scale, key=lambda x: x.get("min_score", 0.0), reverse=True)
+        for rule in sorted_scale:
+            if total >= rule.get("min_score", 0.0):
+                return rule.get("grade", "9")
+        return "9"
+
+    def get_ges_remark(self, grade):
+        scale = config.get("grading_scale", [])
+        for rule in scale:
+            if rule.get("grade") == grade:
+                return rule.get("remark", "")
+        return ""
 
     def load_mark_sheet(self):
         exam_id = self.exam_combo.currentData()
@@ -376,7 +388,7 @@ class ExamsPanel(QWidget):
                 e_score = str(res.exam_score) if res else "0.0"
                 tot_score = str(res.total_score) if res else "0.0"
                 grade_str = res.grade if res else "9"
-                remarks_str = res.remarks if res else ""
+                remarks_str = res.remarks if res and res.remarks else self.get_ges_remark(grade_str)
                 
                 # Setup items
                 # Student ID (ReadOnly)
@@ -434,9 +446,16 @@ class ExamsPanel(QWidget):
                 
             total = c_val + e_val
             grade = self.get_ges_grade(total)
+            remark = self.get_ges_remark(grade)
             
             self.table.item(row, 4).setText(f"{total:.1f}")
             self.table.item(row, 5).setText(grade)
+            
+            remark_item = self.table.item(row, 6)
+            if not remark_item:
+                remark_item = QTableWidgetItem()
+                self.table.setItem(row, 6, remark_item)
+            remark_item.setText(remark)
         except ValueError:
             # Revert to 0.0 if not a valid float
             self.table.item(col).setText("0.0")

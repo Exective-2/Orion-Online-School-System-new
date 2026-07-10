@@ -124,12 +124,15 @@ class DashboardPanel(QWidget):
                 w_layout.setContentsMargins(5, 5, 5, 5)
                 w_layout.setSpacing(2)
                 
+                active_theme = config.get("theme", "dark").lower()
+                is_light = active_theme == "light"
+                
                 title_lbl = QLabel(ann.title)
-                title_lbl.setStyleSheet("font-weight: bold; color: #f8fafc;")
+                title_lbl.setStyleSheet("font-weight: bold; color: #0f172a;" if is_light else "font-weight: bold; color: #f8fafc;")
                 
                 body_lbl = QLabel(ann.content)
                 body_lbl.setWordWrap(True)
-                body_lbl.setStyleSheet("color: #94a3b8; font-size: 12px;")
+                body_lbl.setStyleSheet("color: #334155; font-size: 12px;" if is_light else "color: #94a3b8; font-size: 12px;")
                 
                 target_lbl = QLabel(f"Target: {ann.target_audience} | {ann.created_at.strftime('%Y-%m-%d')}")
                 target_lbl.setStyleSheet("color: #64748b; font-size: 10px;")
@@ -219,15 +222,22 @@ class DashboardPanel(QWidget):
                 chart.setTitle(f"Class Subject Averages - {class_name}")
                 chart.setAnimationOptions(QChart.AnimationOption.SeriesAnimations)
                 
-                theme_is_dark = config.get("theme", "dark") == "dark"
-                if theme_is_dark:
-                    chart.setBackgroundBrush(QColor("#1e293b"))
-                    chart.setTitleBrush(QColor("#f8fafc"))
-                    chart.legend().setLabelColor(QColor("#f8fafc"))
-                else:
+                active_theme = config.get("theme", "dark").lower()
+                if active_theme == "light":
                     chart.setBackgroundBrush(QColor("#ffffff"))
                     chart.setTitleBrush(QColor("#0f172a"))
                     chart.legend().setLabelColor(QColor("#334155"))
+                else:
+                    bg_color = "#1e293b"
+                    if active_theme == "emerald":
+                        bg_color = "#0d291e"
+                    elif active_theme == "sapphire":
+                        bg_color = "#111a2e"
+                    elif active_theme == "amber":
+                        bg_color = "#2c1e10"
+                    chart.setBackgroundBrush(QColor(bg_color))
+                    chart.setTitleBrush(QColor("#f8fafc"))
+                    chart.legend().setLabelColor(QColor("#f8fafc"))
                     
                 axis_x = QBarCategoryAxis()
                 axis_x.append(categories)
@@ -303,15 +313,22 @@ class DashboardPanel(QWidget):
                 chart.setAnimationOptions(QChart.AnimationOption.SeriesAnimations)
                 
                 # Dark mode theme styling for charts
-                theme_is_dark = config.get("theme", "dark") == "dark"
-                if theme_is_dark:
-                    chart.setBackgroundBrush(QColor("#1e293b"))
-                    chart.setTitleBrush(QColor("#f8fafc"))
-                    chart.legend().setLabelColor(QColor("#f8fafc"))
-                else:
+                active_theme = config.get("theme", "dark").lower()
+                if active_theme == "light":
                     chart.setBackgroundBrush(QColor("#ffffff"))
                     chart.setTitleBrush(QColor("#0f172a"))
                     chart.legend().setLabelColor(QColor("#334155"))
+                else:
+                    bg_color = "#1e293b"
+                    if active_theme == "emerald":
+                        bg_color = "#0d291e"
+                    elif active_theme == "sapphire":
+                        bg_color = "#111a2e"
+                    elif active_theme == "amber":
+                        bg_color = "#2c1e10"
+                    chart.setBackgroundBrush(QColor(bg_color))
+                    chart.setTitleBrush(QColor("#f8fafc"))
+                    chart.legend().setLabelColor(QColor("#f8fafc"))
                     
                 axis_x = QBarCategoryAxis()
                 axis_x.append(["Total Summary"])

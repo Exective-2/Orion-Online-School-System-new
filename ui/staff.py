@@ -513,8 +513,8 @@ class RegisterStaffDialog(QDialog):
         layout.addWidget(self.create_user_cb)
         
         self.credentials_widget = QFrame()
-        self.credentials_widget.setFrameShape(QFrame.Shape.StyledPanel)
-        self.credentials_widget.setStyleSheet("QFrame { background-color: rgba(30, 41, 59, 0.5); border-radius: 6px; padding: 10px; }")
+        self.credentials_widget.setObjectName("card")
+        self.credentials_widget.setStyleSheet("padding: 10px;")
         cred_layout = QFormLayout(self.credentials_widget)
         cred_layout.setSpacing(8)
         
