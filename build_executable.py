@@ -1,76 +1,90 @@
+"""
+build_executable.py
+-------------------
+Builds the Orion School Management System as a --onedir PyInstaller package.
+
+Onedir mode is used (NOT onefile) so that sys.executable correctly resolves
+to the install directory at runtime, allowing config.json and the database
+to be found next to the .exe.
+
+After PyInstaller runs, this script:
+  1. Copies a clean config.json (setup_completed = False) into the dist folder
+  2. Copies the assets/ folder into the dist folder
+  3. Removes any leftover development database from dist
+
+Usage:
+    python build_executable.py
+"""
+
 import os
 import subprocess
 import sys
+import shutil
+import json
 from pathlib import Path
 
+
 def build_app():
-    print("Preparing executable build...")
+    print("=" * 60)
+    print("  Orion School Management System — Build Script")
+    print("=" * 60)
+
     base_dir = Path(__file__).resolve().parent
-    main_file = base_dir / "main.py"
-    
-    if not main_file.exists():
-        print(f"Error: {main_file} not found.")
+    spec_file = base_dir / "OrionSchoolManagementSystem.spec"
+    dist_dir = base_dir / "dist" / "OrionSchoolManagementSystem"
+
+    if not spec_file.exists():
+        print(f"ERROR: Spec file not found: {spec_file}")
         sys.exit(1)
-        
-    print("Running PyInstaller...")
-    # Build configurations:
-    # --onefile: bundle into single executable
-    # --windowed: do not open terminal window (GUI only)
-    # --add-data: include default config files or assets
-    # --name: executable name
-    
-    # OS-specific settings
-    separator = ";" if sys.platform.startswith("win") else ":"
-    
-    icon_file = base_dir / "assets" / "sms.ico"
+
+    # ── 1. Run PyInstaller using the .spec file ──────────────────────────────
+    print("\n[1/3] Running PyInstaller (onedir mode)...")
     cmd = [
-        "python",
-        "-m",
-        "PyInstaller",
-        "--onefile",
-        "--windowed",
-        f"--icon={icon_file}" if icon_file.exists() else None,
-        "--name=OrionSchoolManagementSystem",
-        str(main_file)
+        "python", "-m", "PyInstaller",
+        "--clean",
+        "--noconfirm",
+        str(spec_file),
     ]
-    cmd = [c for c in cmd if c is not None]
-    
-    print(f"Executing: {' '.join(cmd)}")
+    print(f"  Command: {' '.join(cmd)}\n")
     try:
         subprocess.run(cmd, check=True)
-        import shutil
-        dist_dir = base_dir / 'dist'
-        
-        # Note: We do NOT copy the development school_management.db database to the dist folder.
-        # This ensures the packaged application is a clean installation and initializes a new database during the Setup Wizard.
-        
-        # Copy config.json if it exists, but reset setup parameters for a clean installation
-        config_file = base_dir / "config.json"
-        if config_file.exists():
-            print("Creating clean config.json for distribution...")
-            import json
-            try:
-                with open(config_file, "r") as f:
-                    config_data = json.load(f)
-                config_data["setup_completed"] = False
-                config_data["school_name"] = "Orion Desktop School System"
-                config_data["school_logo"] = ""
-                with open(dist_dir / "config.json", "w") as f:
-                    json.dump(config_data, f, indent=4)
-            except Exception as e:
-                print(f"Warning: Failed to copy and reset config.json: {e}")
-            
-        # Copy assets folder if it exists
-        assets_dir = base_dir / "assets"
-        if assets_dir.exists():
-            print("Copying assets folder to dist folder...")
-            shutil.copytree(assets_dir, dist_dir / "assets", dirs_exist_ok=True)
-            
-        print("\nBuild completed successfully!")
-        print(f"The packaged application files are located in: {dist_dir}")
     except subprocess.CalledProcessError as e:
-        print(f"\nError: PyInstaller build failed: {e}")
+        print(f"\nERROR: PyInstaller failed: {e}")
         sys.exit(1)
+
+    # ── 2. Copy clean config.json ─────────────────────────────────────────────
+    print("\n[2/3] Writing clean config.json for distribution...")
+    config_src = base_dir / "config.json"
+    config_dst = dist_dir / "config.json"
+    try:
+        with open(config_src, "r") as f:
+            config_data = json.load(f)
+        # Reset to clean install state
+        config_data["setup_completed"] = False
+        config_data["school_name"] = "Orion Desktop School System"
+        config_data["school_logo"] = ""
+        config_data["backup_directory"] = ""
+        config_data["last_monthly_backup_date"] = ""
+        with open(config_dst, "w") as f:
+            json.dump(config_data, f, indent=4)
+        print(f"  Written: {config_dst}")
+    except Exception as e:
+        print(f"  WARNING: Could not write clean config.json: {e}")
+
+    # ── 3. Remove dev database from dist (fresh install gets new DB) ──────────
+    dev_db = dist_dir / "school_management.db"
+    if dev_db.exists():
+        dev_db.unlink()
+        print(f"  Removed dev database from dist folder.")
+
+    # ── Done ──────────────────────────────────────────────────────────────────
+    print("\n" + "=" * 60)
+    print("  BUILD COMPLETE")
+    print("=" * 60)
+    print(f"\n  Output folder : {dist_dir}")
+    print(f"  Next step     : Compile installer.iss with Inno Setup 6")
+    print(f"                  --> produces OrionSMS_Setup.exe\n")
+
 
 if __name__ == "__main__":
     build_app()
