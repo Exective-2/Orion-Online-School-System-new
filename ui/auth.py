@@ -7,7 +7,8 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QPixmap
 from database.connection import get_session
-from database.models import User, Staff
+from database.models import User, Staff, Role, Permission
+from sqlalchemy.orm import joinedload
 from config import config
 from ui.theme import get_theme_stylesheet
 
@@ -98,8 +99,16 @@ class LoginWindow(QWidget):
             
         session = get_session()
         try:
-            # Query user
-            user = session.query(User).filter(User.username == username).first()
+            # Query user with eager loading of all relationships needed by the app
+            user = (
+                session.query(User)
+                .options(
+                    joinedload(User.role).joinedload(Role.permissions),
+                    joinedload(User.staff_profile)
+                )
+                .filter(User.username == username)
+                .first()
+            )
             if not user or not user.is_active:
                 QMessageBox.critical(self, "Login Failed", "Invalid username or inactive account.")
                 return
@@ -110,6 +119,11 @@ class LoginWindow(QWidget):
                 staff_name = "System Administrator"
                 if user.staff_profile:
                     staff_name = f"{user.staff_profile.first_name} {user.staff_profile.last_name}"
+                
+                # Detach user from session so it can be safely used after session closes
+                from sqlalchemy.orm import make_transient
+                session.expunge(user)
+                make_transient(user)
                 
                 # Show greeting message
                 QMessageBox.information(self, "Welcome", f"Access Granted. Welcome, {staff_name} ({user.role.name})!")
