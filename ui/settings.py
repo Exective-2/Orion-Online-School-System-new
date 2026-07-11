@@ -1,7 +1,8 @@
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QFrame, QLabel, 
     QLineEdit, QComboBox, QPushButton, QFormLayout, QMessageBox,
-    QFileDialog, QTabWidget, QCheckBox
+    QFileDialog, QTabWidget, QCheckBox, QTableWidget, QTableWidgetItem,
+    QHeaderView, QSpinBox, QDoubleSpinBox
 )
 from PySide6.QtCore import Qt, Signal
 from config import config, save_config

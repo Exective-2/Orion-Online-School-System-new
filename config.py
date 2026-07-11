@@ -1,15 +1,37 @@
 import os
 import json
 from pathlib import Path
-
-# Paths
 import sys
-if getattr(sys, 'frozen', False):
-    BASE_DIR = Path(sys.executable).resolve().parent
-else:
-    BASE_DIR = Path(__file__).resolve().parent
 
-DATABASE_PATH = BASE_DIR / "school_management.db"
+# ---------------------------------------------------------------------------
+# Path resolution
+# ---------------------------------------------------------------------------
+# When running as a PyInstaller-frozen executable (installed app), the .exe
+# lives in C:\Program Files\... which is READ-ONLY for normal users.
+# All mutable user data (database, config) must go to a writable location.
+#
+# - APP_DIR  : directory of the .exe / source root (read-only in production)
+# - DATA_DIR : writable user-data folder (always has write permission)
+#
+# Development:  both point to the project root.
+# Installed:    APP_DIR = install dir, DATA_DIR = %LOCALAPPDATA%\OrionSMS\
+# ---------------------------------------------------------------------------
+
+if getattr(sys, 'frozen', False):
+    APP_DIR = Path(sys.executable).resolve().parent
+    DATA_DIR = Path(os.environ.get("PROGRAMDATA", "C:/ProgramData")) / "OrionSMS"
+else:
+    APP_DIR = Path(__file__).resolve().parent
+    DATA_DIR = APP_DIR
+
+# Ensure the data directory exists
+DATA_DIR.mkdir(parents=True, exist_ok=True)
+
+# Keep BASE_DIR as an alias to APP_DIR for backward compatibility
+BASE_DIR = APP_DIR
+
+DATABASE_PATH = DATA_DIR / "school_management.db"
+
 
 # Default configs
 DEFAULT_CONFIG = {
@@ -49,7 +71,7 @@ DEFAULT_CONFIG = {
     ]
 }
 
-CONFIG_FILE = BASE_DIR / "config.json"
+CONFIG_FILE = DATA_DIR / "config.json"
 
 def load_config():
     if not CONFIG_FILE.exists():
