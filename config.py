@@ -19,7 +19,7 @@ import sys
 
 if getattr(sys, 'frozen', False):
     APP_DIR = Path(sys.executable).resolve().parent
-    DATA_DIR = Path(os.environ.get("PROGRAMDATA", "C:/ProgramData")) / "OrionSMS"
+    DATA_DIR = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local")) / "OrionSMS"
 else:
     APP_DIR = Path(__file__).resolve().parent
     DATA_DIR = APP_DIR

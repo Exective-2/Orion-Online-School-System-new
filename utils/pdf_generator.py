@@ -11,12 +11,18 @@ from database.connection import get_session
 from database.models import Student, Parent, Class, Payment, StudentBill, Examination, Result, AcademicYear, Term, Subject, Fee, Staff
 from config import config
 
-# Output folder for PDFs
-# Use DATA_DIR so exports always go to a user-writable location
-# (C:\Program Files\... is read-only for standard users when frozen)
+# Output folder for PDFs — resolved lazily so mkdir() never runs at import time
+# (running mkdir at import time crashes the app if the path is not yet writable)
 from config import DATA_DIR
-PDF_OUTPUT_DIR = DATA_DIR / "exports"
-PDF_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+
+def _get_pdf_dir() -> Path:
+    """Return (and lazily create) the exports directory under DATA_DIR."""
+    out = DATA_DIR / "exports"
+    out.mkdir(parents=True, exist_ok=True)
+    return out
+
+# Module-level alias kept for backward compatibility (resolves lazily via _get_pdf_dir())
+# Do NOT call PDF_OUTPUT_DIR directly — use _get_pdf_dir() inside functions.
 
 def add_pdf_header(story, title_text=None):
     from reportlab.platypus import Image
@@ -122,7 +128,7 @@ def generate_student_id_card(student_id: str) -> tuple[bool, str]:
         if not student:
             return False, "Student not found."
             
-        file_path = PDF_OUTPUT_DIR / f"id_card_{student_id}.pdf"
+        file_path = _get_pdf_dir() / f"id_card_{student_id}.pdf"
         
         # ID Card size: CR80 is 85.6mm x 54mm (approx 3.37 x 2.125 inches)
         # We will make the page size slightly larger or exactly CR80
@@ -203,7 +209,7 @@ def generate_admission_form(student_id: str) -> tuple[bool, str]:
         if not student:
             return False, "Student not found."
             
-        file_path = PDF_OUTPUT_DIR / f"admission_slip_{student_id}.pdf"
+        file_path = _get_pdf_dir() / f"admission_slip_{student_id}.pdf"
         
         doc = SimpleDocTemplate(
             str(file_path),
@@ -328,7 +334,7 @@ def generate_fee_receipt(payment_id: int) -> tuple[bool, str]:
         if not payment:
             return False, "Payment transaction record not found."
             
-        file_path = PDF_OUTPUT_DIR / f"fee_receipt_pmt_{payment_id}.pdf"
+        file_path = _get_pdf_dir() / f"fee_receipt_pmt_{payment_id}.pdf"
         
         doc = SimpleDocTemplate(
             str(file_path),
@@ -405,7 +411,7 @@ def generate_report_card(student_id: str, examination_id: int) -> tuple[bool, st
         if not student or not exam:
             return False, "Student or Examination session not found."
             
-        file_path = PDF_OUTPUT_DIR / f"report_card_{student_id}_exam_{examination_id}.pdf"
+        file_path = _get_pdf_dir() / f"report_card_{student_id}_exam_{examination_id}.pdf"
         
         doc = SimpleDocTemplate(
             str(file_path),
@@ -552,7 +558,7 @@ def generate_financial_statement() -> tuple[bool, str]:
         payments = session.query(Payment).all()
         expenses = session.query(Expense).all()
         
-        file_path = PDF_OUTPUT_DIR / "financial_income_statement.pdf"
+        file_path = _get_pdf_dir() / "financial_income_statement.pdf"
         
         doc = SimpleDocTemplate(
             str(file_path),
@@ -684,9 +690,7 @@ def generate_financial_statement() -> tuple[bool, str]:
 
 def generate_payslip_pdf(payslip):
     try:
-        pdf_dir = PDF_OUTPUT_DIR
-        pdf_dir.mkdir(parents=True, exist_ok=True)
-        file_path = pdf_dir / f"payslip_{payslip.staff_id}_{payslip.pay_period.replace(' ', '_')}.pdf"
+        file_path = _get_pdf_dir() / f"payslip_{payslip.staff_id}_{payslip.pay_period.replace(' ', '_')}.pdf"
         
         doc = SimpleDocTemplate(
             str(file_path),
