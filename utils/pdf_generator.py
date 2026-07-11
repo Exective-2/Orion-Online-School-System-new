@@ -12,8 +12,11 @@ from database.models import Student, Parent, Class, Payment, StudentBill, Examin
 from config import config
 
 # Output folder for PDFs
-PDF_OUTPUT_DIR = Path(__file__).resolve().parent.parent / "exports"
-PDF_OUTPUT_DIR.mkdir(exist_ok=True)
+# Use DATA_DIR so exports always go to a user-writable location
+# (C:\Program Files\... is read-only for standard users when frozen)
+from config import DATA_DIR
+PDF_OUTPUT_DIR = DATA_DIR / "exports"
+PDF_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 def add_pdf_header(story, title_text=None):
     from reportlab.platypus import Image
@@ -681,8 +684,8 @@ def generate_financial_statement() -> tuple[bool, str]:
 
 def generate_payslip_pdf(payslip):
     try:
-        pdf_dir = Path("exports")
-        pdf_dir.mkdir(exist_ok=True)
+        pdf_dir = PDF_OUTPUT_DIR
+        pdf_dir.mkdir(parents=True, exist_ok=True)
         file_path = pdf_dir / f"payslip_{payslip.staff_id}_{payslip.pay_period.replace(' ', '_')}.pdf"
         
         doc = SimpleDocTemplate(

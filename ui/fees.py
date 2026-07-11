@@ -10,6 +10,7 @@ from database.connection import get_session
 from database.models import Student, Fee, StudentBill, Payment, Class, Expense, SMSLog
 from utils.pdf_generator import generate_fee_receipt, generate_financial_statement
 from utils.exporter import export_to_excel
+from config import DATA_DIR
 import datetime
 
 class FeesPanel(QWidget):
@@ -278,7 +279,7 @@ class FeesPanel(QWidget):
                 "outstanding_balance_ghs": float(self.ledger_table.item(row, 5).text()),
             })
             
-        success, message = export_to_excel(data, "exports/fee_balances.xlsx", "Defaulters Ledger")
+        success, message = export_to_excel(data, str(DATA_DIR / "exports" / "fee_balances.xlsx"), "Defaulters Ledger")
         if success:
             QMessageBox.information(self, "Export Complete", message)
         else:
