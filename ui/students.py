@@ -395,9 +395,11 @@ class StudentsPanel(QWidget):
         dialog.exec()
 
     def bulk_upload_students(self):
-        file_path, _ = QFileDialog.getOpenFileName(
-            self, "Bulk Upload Students", "", "Data Files (*.csv *.xlsx *.xls)"
-        )
+        dialog = BulkUploadStudentsDialog(self)
+        if dialog.exec() != QDialog.Accepted:
+            return
+            
+        file_path = dialog.selected_file_path
         if not file_path:
             return
             
@@ -766,3 +768,78 @@ class AdmitStudentDialog(QDialog):
             QMessageBox.critical(self, "Error", f"Failed to admit student:\n{e}")
         finally:
             session.close()
+
+
+class BulkUploadStudentsDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Bulk Upload Students")
+        self.setMinimumWidth(400)
+        self.init_ui()
+        self.selected_file_path = None
+        
+    def init_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setSpacing(15)
+        layout.setContentsMargins(20, 20, 20, 20)
+        
+        info_label = QLabel(
+            "<b>Instructions:</b><br/>"
+            "1. Download the template below to see the required format.<br/>"
+            "2. Fill in student records. Required fields: <i>first_name, last_name, gender, date_of_birth</i>.<br/>"
+            "3. Click 'Upload & Import File' to import the data into the system."
+        )
+        info_label.setWordWrap(True)
+        layout.addWidget(info_label)
+        
+        # Download button
+        download_btn = QPushButton("Download Template (CSV)")
+        download_btn.setObjectName("secondary_btn")
+        download_btn.clicked.connect(self.download_template)
+        layout.addWidget(download_btn)
+        
+        # Import button
+        import_btn = QPushButton("Upload & Import File")
+        import_btn.setObjectName("primary_btn")
+        import_btn.clicked.connect(self.import_file)
+        layout.addWidget(import_btn)
+        
+        # Cancel button
+        cancel_btn = QPushButton("Close")
+        cancel_btn.clicked.connect(self.reject)
+        layout.addWidget(cancel_btn)
+        
+    def download_template(self):
+        file_path, _ = QFileDialog.getSaveFileName(
+            self, "Save Student Template", "student_upload_template.csv", "CSV Files (*.csv)"
+        )
+        if not file_path:
+            return
+        try:
+            import csv
+            headers = [
+                'first_name', 'last_name', 'other_names', 'gender', 'date_of_birth',
+                'class_name', 'parent_name', 'parent_phone', 'parent_email',
+                'emergency_contact_name', 'emergency_contact_phone'
+            ]
+            with open(file_path, 'w', newline='', encoding='utf-8') as f:
+                writer = csv.writer(f)
+                writer.writerow(headers)
+                writer.writerow([
+                    'John', 'Doe', 'Kofi', 'Male', '2015-06-15',
+                    'Class 1A', 'Robert Doe', '+233240000000', 'robert.doe@example.com',
+                    'Mary Doe', '+233241111111'
+                ])
+            QMessageBox.information(self, "Success", f"Student upload template saved successfully at:\n{file_path}")
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to save template:\n{e}")
+            
+    def import_file(self):
+        file_path, _ = QFileDialog.getOpenFileName(
+            self, "Select Student Import File", "", "Data Files (*.csv *.xlsx *.xls)"
+        )
+        if not file_path:
+            return
+            
+        self.selected_file_path = file_path
+        self.accept()

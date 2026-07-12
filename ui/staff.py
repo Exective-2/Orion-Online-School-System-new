@@ -338,9 +338,11 @@ class StaffPanel(QWidget):
             session.close()
 
     def bulk_upload_staff(self):
-        file_path, _ = QFileDialog.getOpenFileName(
-            self, "Bulk Upload Staff", "", "Data Files (*.csv *.xlsx *.xls)"
-        )
+        dialog = BulkUploadStaffDialog(self)
+        if dialog.exec() != QDialog.Accepted:
+            return
+            
+        file_path = dialog.selected_file_path
         if not file_path:
             return
             
@@ -802,6 +804,80 @@ class RegisterStaffDialog(QDialog):
             QMessageBox.critical(self, "Error", f"Failed to register staff:\n{e}")
         finally:
             session.close()
+
+
+class BulkUploadStaffDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Bulk Upload Staff")
+        self.setMinimumWidth(400)
+        self.init_ui()
+        self.selected_file_path = None
+        
+    def init_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setSpacing(15)
+        layout.setContentsMargins(20, 20, 20, 20)
+        
+        info_label = QLabel(
+            "<b>Instructions:</b><br/>"
+            "1. Download the template below to see the required format.<br/>"
+            "2. Fill in staff records. Required fields: <i>first_name, last_name, phone, role_title</i>.<br/>"
+            "   (Supported roles: teacher, accountant, librarian, storekeeper, headteacher)<br/>"
+            "3. Click 'Upload & Import File' to import the data into the system."
+        )
+        info_label.setWordWrap(True)
+        layout.addWidget(info_label)
+        
+        # Download button
+        download_btn = QPushButton("Download Template (CSV)")
+        download_btn.setObjectName("secondary_btn")
+        download_btn.clicked.connect(self.download_template)
+        layout.addWidget(download_btn)
+        
+        # Import button
+        import_btn = QPushButton("Upload & Import File")
+        import_btn.setObjectName("primary_btn")
+        import_btn.clicked.connect(self.import_file)
+        layout.addWidget(import_btn)
+        
+        # Cancel button
+        cancel_btn = QPushButton("Close")
+        cancel_btn.clicked.connect(self.reject)
+        layout.addWidget(cancel_btn)
+        
+    def download_template(self):
+        file_path, _ = QFileDialog.getSaveFileName(
+            self, "Save Staff Template", "staff_upload_template.csv", "CSV Files (*.csv)"
+        )
+        if not file_path:
+            return
+        try:
+            import csv
+            headers = [
+                'first_name', 'last_name', 'other_names', 'phone', 'email',
+                'role_title', 'department', 'qualification', 'address', 'base_salary'
+            ]
+            with open(file_path, 'w', newline='', encoding='utf-8') as f:
+                writer = csv.writer(f)
+                writer.writerow(headers)
+                writer.writerow([
+                    'Jane', 'Smith', 'Naa', '+233242222222', 'jane.smith@example.com',
+                    'Teacher', 'Science', 'B.Ed Science', 'Cantonments, Accra', '3500.0'
+                ])
+            QMessageBox.information(self, "Success", f"Staff upload template saved successfully at:\n{file_path}")
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to save template:\n{e}")
+            
+    def import_file(self):
+        file_path, _ = QFileDialog.getOpenFileName(
+            self, "Select Staff Import File", "", "Data Files (*.csv *.xlsx *.xls)"
+        )
+        if not file_path:
+            return
+            
+        self.selected_file_path = file_path
+        self.accept()
 
 
 
