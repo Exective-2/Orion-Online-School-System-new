@@ -6,7 +6,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt, QDate, Signal
 from database.connection import get_session
-from database.models import Student, Staff, Attendance, SMSLog
+from database.models import Student, Staff, Attendance, SMSLog, Class
 from config import config
 import datetime
 
@@ -36,6 +36,11 @@ class AttendancePanel(QWidget):
             self.staff_tab = QWidget()
             self.init_staff_tab()
             self.tabs.addTab(self.staff_tab, "Staff Register")
+            
+        # 3. Attendance Reports
+        self.report_tab = QWidget()
+        self.init_report_tab()
+        self.tabs.addTab(self.report_tab, "Attendance Reports")
         
         layout.addWidget(self.tabs)
         
@@ -415,3 +420,174 @@ class AttendancePanel(QWidget):
         self.load_student_roll()
         if hasattr(self, 'staff_table'):
             self.load_staff_roll()
+        self.load_report_classes_combo()
+
+    def init_report_tab(self):
+        tab_layout = QVBoxLayout(self.report_tab)
+        tab_layout.setContentsMargins(15, 15, 15, 15)
+        tab_layout.setSpacing(15)
+        
+        # Header Controls
+        header = QFrame()
+        header_layout = QHBoxLayout(header)
+        header_layout.setContentsMargins(0, 0, 0, 0)
+        
+        header_layout.addWidget(QLabel("Class Stream:"))
+        self.rep_class_combo = QComboBox()
+        header_layout.addWidget(self.rep_class_combo)
+        
+        header_layout.addWidget(QLabel("Start Date:"))
+        self.rep_start_date = QDateEdit()
+        self.rep_start_date.setCalendarPopup(True)
+        # Set to first day of current month
+        today = QDate.currentDate()
+        self.rep_start_date.setDate(QDate(today.year(), today.month(), 1))
+        header_layout.addWidget(self.rep_start_date)
+        
+        header_layout.addWidget(QLabel("End Date:"))
+        self.rep_end_date = QDateEdit()
+        self.rep_end_date.setCalendarPopup(True)
+        self.rep_end_date.setDate(today)
+        header_layout.addWidget(self.rep_end_date)
+        
+        # Buttons
+        run_btn = QPushButton("Generate Report")
+        run_btn.setObjectName("secondary_btn")
+        run_btn.clicked.connect(self.generate_attendance_report)
+        header_layout.addWidget(run_btn)
+        
+        self.rep_export_btn = QPushButton("Export to PDF")
+        self.rep_export_btn.setObjectName("primary_btn")
+        self.rep_export_btn.setEnabled(False)
+        self.rep_export_btn.clicked.connect(self.export_attendance_pdf)
+        header_layout.addWidget(self.rep_export_btn)
+        
+        header_layout.addStretch()
+        tab_layout.addWidget(header)
+        
+        # Report table
+        self.rep_table = QTableWidget()
+        self.rep_table.setColumnCount(6)
+        self.rep_table.setHorizontalHeaderLabels(["Student ID", "Student Name", "Present Days", "Absent Days", "Late Days", "Attendance Rate"])
+        self.rep_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self.rep_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+        tab_layout.addWidget(self.rep_table)
+        
+        self.load_report_classes_combo()
+        
+    def load_report_classes_combo(self):
+        from database.models import Class, ClassTeacher
+        self.rep_class_combo.clear()
+        session = get_session()
+        try:
+            is_admin_or_head = False
+            if self.user.role:
+                is_admin_or_head = self.user.role.name in ["Super Admin", "Admin/Headteacher"]
+                
+            if is_admin_or_head:
+                classes = session.query(Class).all()
+            else:
+                classes = []
+                if self.user.staff_profile:
+                    ct_records = session.query(ClassTeacher).filter(
+                        ClassTeacher.staff_id == self.user.staff_profile.id
+                    ).all()
+                    classes = [record.class_obj for record in ct_records if record.class_obj]
+                    
+            for c in classes:
+                self.rep_class_combo.addItem(c.name, c.id)
+        except Exception as e:
+            print(f"Error loading report classes: {e}")
+        finally:
+            session.close()
+            
+    def generate_attendance_report(self):
+        self.rep_table.setRowCount(0)
+        self.rep_export_btn.setEnabled(False)
+        
+        class_id = self.rep_class_combo.currentData()
+        if not class_id:
+            QMessageBox.warning(self, "Selection Required", "Please select a class stream first.")
+            return
+            
+        start_q = self.rep_start_date.date()
+        end_q = self.rep_end_date.date()
+        
+        start_d = datetime.date(start_q.year(), start_q.month(), start_q.day())
+        end_d = datetime.date(end_q.year(), end_q.month(), end_q.day())
+        
+        if start_d > end_d:
+            QMessageBox.warning(self, "Validation Error", "Start Date cannot be after End Date.")
+            return
+            
+        session = get_session()
+        try:
+            students = session.query(Student).filter(
+                Student.class_id == class_id,
+                Student.status == "Active"
+            ).order_by(Student.last_name.asc()).all()
+            
+            if not students:
+                QMessageBox.warning(self, "No Records", "No active students found in this class stream.")
+                return
+                
+            self.rep_table.setRowCount(len(students))
+            self.rep_data = []
+            
+            for i, s in enumerate(students):
+                att_records = session.query(Attendance).filter(
+                    Attendance.student_id == s.id,
+                    Attendance.date >= start_d,
+                    Attendance.date <= end_d
+                ).all()
+                
+                present = sum(1 for r in att_records if r.status == "Present")
+                absent = sum(1 for r in att_records if r.status == "Absent")
+                late = sum(1 for r in att_records if r.status == "Late")
+                
+                total_marked = present + absent + late
+                rate_str = "N/A"
+                if total_marked > 0:
+                    rate_str = f"{int(((present + late) / total_marked) * 100)}%"
+                    
+                s_name = f"{s.last_name}, {s.first_name} {s.other_names or ''}".strip()
+                
+                self.rep_table.setItem(i, 0, QTableWidgetItem(s.id))
+                self.rep_table.setItem(i, 1, QTableWidgetItem(s_name))
+                self.rep_table.setItem(i, 2, QTableWidgetItem(str(present)))
+                self.rep_table.setItem(i, 3, QTableWidgetItem(str(absent)))
+                self.rep_table.setItem(i, 4, QTableWidgetItem(str(late)))
+                self.rep_table.setItem(i, 5, QTableWidgetItem(rate_str))
+                
+                self.rep_data.append([s.id, s_name, str(present), str(absent), str(late), rate_str])
+                
+            self.rep_export_btn.setEnabled(True)
+            
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to generate report: {e}")
+        finally:
+            session.close()
+            
+    def export_attendance_pdf(self):
+        if not hasattr(self, 'rep_data') or not self.rep_data:
+            return
+            
+        file_path, _ = QFileDialog.getSaveFileName(
+            self, "Save Attendance Report", "attendance_report.pdf", "PDF Files (*.pdf)"
+        )
+        if not file_path:
+            return
+            
+        class_name = self.rep_class_combo.currentText()
+        start_q = self.rep_start_date.date()
+        end_q = self.rep_end_date.date()
+        date_range = f"{start_q.toString('yyyy-MM-dd')} to {end_q.toString('yyyy-MM-dd')}"
+        
+        headers = ["Student ID", "Student Name", "Present Days", "Absent Days", "Late Days", "Attendance Rate"]
+        
+        from utils.pdf_generator import generate_attendance_report_pdf
+        success, filepath = generate_attendance_report_pdf(class_name, date_range, headers, self.rep_data, file_path)
+        if success:
+            QMessageBox.information(self, "Success", f"Attendance report PDF generated successfully at:\n{filepath}")
+        else:
+            QMessageBox.warning(self, "Failed", f"Failed to generate PDF:\n{filepath}")

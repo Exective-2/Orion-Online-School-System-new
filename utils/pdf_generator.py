@@ -1107,3 +1107,72 @@ def generate_class_summary_pdf(class_name: str, exam_name: str, headers: list, r
         return True, str(file_path)
     except Exception as e:
         return False, str(e)
+
+def generate_attendance_report_pdf(class_name: str, date_range: str, headers: list, rows: list, output_path: str = None) -> tuple[bool, str]:
+    """
+    Generates a Landscape A4 PDF containing the student attendance report.
+    """
+    try:
+        file_path = Path(output_path) if output_path else _get_pdf_dir() / "attendance_report.pdf"
+        
+        from reportlab.lib.pagesizes import A4, landscape
+        doc = SimpleDocTemplate(
+            str(file_path),
+            pagesize=landscape(A4),
+            leftMargin=36,
+            rightMargin=36,
+            topMargin=36,
+            bottomMargin=36
+        )
+        
+        styles = getSampleStyleSheet()
+        body_style = ParagraphStyle(
+            'BodyAtt',
+            fontName='Helvetica',
+            fontSize=8,
+            textColor=colors.HexColor("#334155")
+        )
+        th_style = ParagraphStyle(
+            'TableHeaderAtt',
+            parent=body_style,
+            fontName='Helvetica-Bold',
+            textColor=colors.white
+        )
+        
+        story = []
+        add_pdf_header(story, f"STUDENT ATTENDANCE REPORT - {class_name.upper()}")
+        
+        title_style = ParagraphStyle(
+            'SubAtt',
+            fontName='Helvetica-Bold',
+            fontSize=10,
+            alignment=1,
+            textColor=colors.HexColor("#1e293b"),
+            spaceAfter=12
+        )
+        story.append(Paragraph(f"DATE RANGE: {date_range.upper()}", title_style))
+        
+        table_rows = []
+        table_rows.append([Paragraph(f"<b>{h}</b>", th_style) for h in headers])
+        
+        for r in rows:
+            table_rows.append([Paragraph(str(cell), body_style) for cell in r])
+            
+        col_count = len(headers)
+        col_width = 770.0 / col_count
+        
+        t = Table(table_rows, colWidths=[col_width] * col_count)
+        t.setStyle(TableStyle([
+            ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#2563eb")),
+            ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor("#cbd5e1")),
+            ('ROWBACKGROUNDS', (0,1), (-1,-1), [colors.white, colors.HexColor("#f8fafc")]),
+            ('PADDING', (0,0), (-1,-1), 4),
+            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+        ]))
+        
+        story.append(t)
+        
+        doc.build(story)
+        return True, str(file_path)
+    except Exception as e:
+        return False, str(e)
