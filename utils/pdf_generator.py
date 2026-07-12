@@ -1176,3 +1176,95 @@ def generate_attendance_report_pdf(class_name: str, date_range: str, headers: li
         return True, str(file_path)
     except Exception as e:
         return False, str(e)
+
+def generate_timetable_pdf(class_name: str, term_name: str, headers: list, rows: list, output_path: str = None) -> tuple[bool, str]:
+    """
+    Generates a Landscape A4 PDF containing the class timetable schedule.
+    """
+    try:
+        file_path = Path(output_path) if output_path else _get_pdf_dir() / "timetable.pdf"
+        
+        from reportlab.lib.pagesizes import A4, landscape
+        doc = SimpleDocTemplate(
+            str(file_path),
+            pagesize=landscape(A4),
+            leftMargin=36,
+            rightMargin=36,
+            topMargin=36,
+            bottomMargin=36
+        )
+        
+        styles = getSampleStyleSheet()
+        body_style = ParagraphStyle(
+            'BodyTT',
+            fontName='Helvetica',
+            fontSize=8,
+            alignment=1, # Center text in cells
+            textColor=colors.HexColor("#334155")
+        )
+        th_style = ParagraphStyle(
+            'TableHeaderTT',
+            parent=body_style,
+            fontName='Helvetica-Bold',
+            fontSize=9,
+            alignment=1,
+            textColor=colors.white
+        )
+        
+        story = []
+        add_pdf_header(story, f"CLASS TIMETABLE SCHEDULE - {class_name.upper()}")
+        
+        title_style = ParagraphStyle(
+            'SubTT',
+            fontName='Helvetica-Bold',
+            fontSize=10,
+            alignment=1,
+            textColor=colors.HexColor("#1e293b"),
+            spaceAfter=12
+        )
+        story.append(Paragraph(f"ACADEMIC SESSION: {term_name.upper()}", title_style))
+        
+        table_rows = []
+        table_rows.append([Paragraph(f"<b>{h}</b>", th_style) for h in headers])
+        
+        for r_idx, r in enumerate(rows):
+            row_cells = []
+            for c_idx, cell in enumerate(r):
+                formatted_cell = cell.replace('\n', '<br/>')
+                
+                if formatted_cell in ["BREAK", "LUNCH"]:
+                    txt_style = ParagraphStyle('BreakTxt', parent=body_style, fontName='Helvetica-Bold', textColor=colors.HexColor("#475569"))
+                    row_cells.append(Paragraph(formatted_cell, txt_style))
+                else:
+                    if c_idx == 0:
+                        ts_style = ParagraphStyle('TSCol', parent=body_style, fontName='Helvetica-Bold', alignment=0)
+                        row_cells.append(Paragraph(formatted_cell, ts_style))
+                    else:
+                        row_cells.append(Paragraph(formatted_cell, body_style))
+            table_rows.append(row_cells)
+            
+        col_count = len(headers)
+        col_widths = [120] + [(770.0 - 120.0) / (col_count - 1)] * (col_count - 1)
+        
+        t = Table(table_rows, colWidths=col_widths)
+        
+        t_style = TableStyle([
+            ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#2563eb")),
+            ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor("#cbd5e1")),
+            ('ROWBACKGROUNDS', (0,1), (-1,-1), [colors.white, colors.HexColor("#f8fafc")]),
+            ('PADDING', (0,0), (-1,-1), 8),
+            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+        ])
+        
+        t_style.add('SPAN', (1, 4), (5, 4))
+        t_style.add('BACKGROUND', (1, 4), (5, 4), colors.HexColor("#cbd5e1"))
+        t_style.add('SPAN', (1, 7), (5, 7))
+        t_style.add('BACKGROUND', (1, 7), (5, 7), colors.HexColor("#cbd5e1"))
+        
+        t.setStyle(t_style)
+        story.append(t)
+        
+        doc.build(story)
+        return True, str(file_path)
+    except Exception as e:
+        return False, str(e)

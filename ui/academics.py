@@ -352,6 +352,11 @@ class AcademicsPanel(QWidget):
         self.auto_gen_btn.clicked.connect(self.auto_generate_timetable)
         top_bar_layout.addWidget(self.auto_gen_btn)
         
+        self.export_tt_btn = QPushButton("Export to PDF")
+        self.export_tt_btn.setObjectName("primary_btn")
+        self.export_tt_btn.clicked.connect(self.export_timetable_pdf)
+        top_bar_layout.addWidget(self.export_tt_btn)
+        
         tab_layout.addWidget(top_bar)
         
         # Scheduler Grid (9 rows for time slots, 5 columns for days)
@@ -652,6 +657,67 @@ class AcademicsPanel(QWidget):
         dialog = AddTimetableSlotDialog(class_id, day, slot_time, self)
         dialog.timetable_changed.connect(self.load_timetable)
         dialog.exec()
+        
+    def export_timetable_pdf(self):
+        class_id = self.tt_class_combo.currentData()
+        class_name = self.tt_class_combo.currentText()
+        if not class_id:
+            QMessageBox.warning(self, "Validation Error", "Please select a class stream first.")
+            return
+            
+        file_path, _ = QFileDialog.getSaveFileName(
+            self, "Save Timetable PDF", f"timetable_{class_name.replace(' ', '_')}.pdf", "PDF Files (*.pdf)"
+        )
+        if not file_path:
+            return
+            
+        session = get_session()
+        try:
+            # Active term ids
+            ay_id = config.get("active_academic_year_id", 1)
+            term_id = config.get("active_term_id", 1)
+            
+            # Fetch slots
+            from database.models import TimetableSlot, AcademicYear, Term
+            ay = session.query(AcademicYear).filter(AcademicYear.id == ay_id).first()
+            term = session.query(Term).filter(Term.id == term_id).first()
+            term_name = f"{ay.name} - {term.name}" if (ay and term) else "Academic Session"
+            
+            slots = session.query(TimetableSlot).filter(
+                TimetableSlot.class_id == class_id,
+                TimetableSlot.academic_year_id == ay_id,
+                TimetableSlot.term_id == term_id
+            ).all()
+            
+            # Build the matrix
+            headers = ["Time Slot"] + self.days_list
+            rows = []
+            
+            for row_idx, time_slot in enumerate(self.time_slots_list):
+                row_data = [time_slot]
+                if row_idx == 3:
+                    row_data += ["BREAK"] * 5
+                elif row_idx == 6:
+                    row_data += ["LUNCH"] * 5
+                else:
+                    for day in self.days_list:
+                        slot = next((s for s in slots if s.day_of_week == day and s.time_slot == time_slot), None)
+                        if slot:
+                            row_data.append(f"{slot.subject.name}\n({slot.staff.last_name})")
+                        else:
+                            row_data.append("-")
+                rows.append(row_data)
+                
+            from utils.pdf_generator import generate_timetable_pdf
+            success, filepath = generate_timetable_pdf(class_name, term_name, headers, rows, file_path)
+            if success:
+                QMessageBox.information(self, "Success", f"Timetable exported successfully to:\n{filepath}")
+            else:
+                QMessageBox.warning(self, "Failed", f"Failed to generate timetable PDF:\n{filepath}")
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to export timetable: {e}")
+        finally:
+            session.close()
         
     def refresh(self):
         self.load_terms()
