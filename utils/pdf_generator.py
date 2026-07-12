@@ -8,7 +8,7 @@ from reportlab.lib import colors
 from reportlab.lib.units import inch, mm
 
 from database.connection import get_session
-from database.models import Student, Parent, Class, Payment, StudentBill, Examination, Result, AcademicYear, Term, Subject, Fee, Staff
+from database.models import Student, Parent, Class, Payment, StudentBill, Examination, Result, AcademicYear, Term, Subject, Fee, Staff, Expense
 from config import config
 
 # Output folder for PDFs — resolved lazily so mkdir() never runs at import time
