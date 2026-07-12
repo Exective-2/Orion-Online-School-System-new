@@ -2,7 +2,7 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QFrame, QLabel, 
     QLineEdit, QComboBox, QPushButton, QFormLayout, QMessageBox,
     QFileDialog, QTabWidget, QCheckBox, QTableWidget, QTableWidgetItem,
-    QHeaderView, QSpinBox, QDoubleSpinBox
+    QHeaderView, QSpinBox, QDoubleSpinBox, QRadioButton
 )
 from PySide6.QtCore import Qt, Signal
 from config import config, save_config
@@ -49,8 +49,13 @@ class SettingsPanel(QWidget):
             self.grading_tab = QWidget()
             self.init_grading_tab()
             self.tabs.addTab(self.grading_tab, "Grading Scale")
+            
+            # 4. System Reset Tab
+            self.reset_tab = QWidget()
+            self.init_reset_tab()
+            self.tabs.addTab(self.reset_tab, "System Reset")
         
-        # 3. User Account Tab
+        # 5. User Account Tab
         self.account_tab = QWidget()
         self.init_account_tab()
         self.tabs.addTab(self.account_tab, "My Account")
@@ -640,3 +645,241 @@ class SettingsPanel(QWidget):
             self.load_grading_scale_table()
         else:
             QMessageBox.critical(self, "Error", "Failed to write grading scale configurations to file.")
+
+    def init_reset_tab(self):
+        tab_layout = QVBoxLayout(self.reset_tab)
+        tab_layout.setContentsMargins(15, 15, 15, 15)
+        tab_layout.setSpacing(15)
+        
+        # Warning Card
+        warn_card = QFrame()
+        warn_card.setObjectName("card")
+        warn_card.setStyleSheet("background-color: #7f1d1d; border: 1px solid #ef4444; border-radius: 8px; padding: 15px;")
+        warn_layout = QVBoxLayout(warn_card)
+        
+        warn_title = QLabel("⚠️ CRITICAL: SYSTEM RESET ZONE")
+        warn_title.setStyleSheet("font-size: 16px; font-weight: bold; color: #fecaca; background: transparent;")
+        warn_layout.addWidget(warn_title)
+        
+        warn_desc = QLabel(
+            "Performing a system reset will permanently delete data from the selected modules.\n"
+            "This action is irreversible. Please create a database backup before proceeding!"
+        )
+        warn_desc.setWordWrap(True)
+        warn_desc.setStyleSheet("color: #fca5a5; font-size: 13px; background: transparent;")
+        warn_layout.addWidget(warn_desc)
+        
+        tab_layout.addWidget(warn_card)
+        
+        # Options Frame
+        opts_frame = QFrame()
+        opts_frame.setObjectName("card")
+        opts_layout = QVBoxLayout(opts_frame)
+        opts_layout.setSpacing(12)
+        
+        opts_title = QLabel("Choose Reset Scope:")
+        opts_title.setStyleSheet("font-size: 14px; font-weight: bold;")
+        opts_layout.addWidget(opts_title)
+        
+        self.reset_full_radio = QRadioButton("Full System Reset (Wipes all database tables, configurations, and forces Setup Wizard restart)")
+        self.reset_full_radio.setChecked(True)
+        self.reset_full_radio.toggled.connect(self.toggle_reset_options)
+        opts_layout.addWidget(self.reset_full_radio)
+        
+        self.reset_selective_radio = QRadioButton("Selective Module Reset (Allows wiping individual data registers)")
+        opts_layout.addWidget(self.reset_selective_radio)
+        
+        # Selective checkboxes container
+        self.sel_container = QWidget()
+        sel_layout = QVBoxLayout(self.sel_container)
+        sel_layout.setContentsMargins(20, 5, 20, 5)
+        sel_layout.setSpacing(8)
+        
+        self.chk_academics = QCheckBox("Academic Records & Student Profiles (Classes, Subjects, Students, Parents, remarks, timetable)")
+        self.chk_exams = QCheckBox("Exams & Assessment Scores (Examination settings, student scores, results)")
+        self.chk_finance = QCheckBox("Financial Records & Finance Data (Bills, Fees, Payments, Expenses, Payslips)")
+        self.chk_attendance = QCheckBox("Attendance Logs (Student and Staff daily presence/absence records)")
+        self.chk_library = QCheckBox("Library Records (Book catalog, checkout history, overdue issues, and fines)")
+        self.chk_staff = QCheckBox("Staff Directory & Accounts (All employee profiles & user login accounts, excluding current Admin)")
+        
+        sel_layout.addWidget(self.chk_academics)
+        sel_layout.addWidget(self.chk_exams)
+        sel_layout.addWidget(self.chk_finance)
+        sel_layout.addWidget(self.chk_attendance)
+        sel_layout.addWidget(self.chk_library)
+        sel_layout.addWidget(self.chk_staff)
+        
+        opts_layout.addWidget(self.sel_container)
+        self.sel_container.setVisible(False)
+        
+        tab_layout.addWidget(opts_frame)
+        
+        # Execution Card
+        exec_frame = QFrame()
+        exec_frame.setObjectName("card")
+        exec_layout = QFormLayout(exec_frame)
+        exec_layout.setSpacing(10)
+        
+        self.reset_pass_input = QLineEdit()
+        self.reset_pass_input.setPlaceholderText("Enter your account password to confirm reset")
+        self.reset_pass_input.setEchoMode(QLineEdit.EchoMode.Password)
+        
+        self.exec_reset_btn = QPushButton("Execute Selected System Reset")
+        self.exec_reset_btn.setObjectName("danger_btn")
+        self.exec_reset_btn.setStyleSheet("background-color: #dc2626; color: white; font-weight: bold; min-height: 40px;")
+        self.exec_reset_btn.clicked.connect(self.execute_system_reset)
+        
+        exec_layout.addRow("Verify Password:", self.reset_pass_input)
+        exec_layout.addRow(self.exec_reset_btn)
+        
+        tab_layout.addWidget(exec_frame)
+        tab_layout.addStretch()
+        
+    def toggle_reset_options(self):
+        self.sel_container.setVisible(self.reset_selective_radio.isChecked())
+
+    def execute_system_reset(self):
+        password = self.reset_pass_input.text()
+        if not password:
+            QMessageBox.warning(self, "Validation Error", "Please enter your password to authorize this reset operation.")
+            return
+            
+        session = get_session()
+        try:
+            current_db_user = session.query(User).filter(User.id == self.user.id).first()
+            if not current_db_user or not verify_password(current_db_user.password_hash, password):
+                QMessageBox.critical(self, "Authorization Failure", "Incorrect password. System reset aborted.")
+                return
+        finally:
+            session.close()
+            
+        confirm = QMessageBox.warning(
+            self, "CONFIRM SYSTEM RESET",
+            "Are you absolutely sure you want to perform this system reset?\n\n"
+            "This will delete data and restart/reload configurations. This action CANNOT BE UNDONE.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
+        if confirm == QMessageBox.StandardButton.No:
+            return
+            
+        if self.reset_full_radio.isChecked():
+            self.run_full_system_reset()
+        else:
+            self.run_selective_reset()
+
+    def run_full_system_reset(self):
+        try:
+            from database.connection import get_engine
+            from database.models import Base
+            from PySide6.QtWidgets import QApplication
+            engine = get_engine()
+            
+            engine.dispose()
+            
+            Base.metadata.drop_all(bind=engine)
+            Base.metadata.create_all(bind=engine)
+            
+            from config import config, save_config
+            config["setup_completed"] = False
+            config["school_name"] = "School Management System"
+            config["school_motto"] = ""
+            config["school_email"] = ""
+            config["school_phone"] = ""
+            config["school_address"] = ""
+            config["school_logo"] = ""
+            save_config(config)
+            
+            QMessageBox.information(
+                self, "System Reset Success",
+                "Full System Reset executed successfully!\n\n"
+                "The database has been fully wiped and the configuration has been reset. "
+                "The application will now close. Please restart it to run the Installation Setup Wizard."
+            )
+            QApplication.quit()
+        except Exception as e:
+            QMessageBox.critical(self, "Reset Failed", f"Failed to perform full system reset:\n{e}")
+
+    def run_selective_reset(self):
+        session = get_session()
+        try:
+            from database.models import (
+                Attendance, Result, Examination, Payment, StudentBill, Fee, Expense, Payslip,
+                LibraryIssue, LibraryBook, StudentReportRemark, TimetableSlot, TeacherSubject,
+                ClassTeacher, Student, Parent, Class, Subject, Staff, User
+            )
+            
+            deleted_modules = []
+            
+            # 1. Attendance
+            if self.chk_attendance.isChecked():
+                session.query(Attendance).delete()
+                deleted_modules.append("Attendance Logs")
+                
+            # 2. Library
+            if self.chk_library.isChecked():
+                session.query(LibraryIssue).delete()
+                session.query(LibraryBook).delete()
+                deleted_modules.append("Library Catalog")
+                
+            # 3. Exams & Grades
+            if self.chk_exams.isChecked():
+                session.query(Result).delete()
+                session.query(Examination).delete()
+                deleted_modules.append("Exams & Assessments")
+                
+            # 4. Financial Records
+            if self.chk_finance.isChecked():
+                session.query(Payment).delete()
+                session.query(StudentBill).delete()
+                session.query(Fee).delete()
+                session.query(Expense).delete()
+                session.query(Payslip).delete()
+                deleted_modules.append("Financial Records")
+                
+            # 5. Academic Records & Students
+            if self.chk_academics.isChecked():
+                session.query(Result).delete()
+                session.query(StudentReportRemark).delete()
+                session.query(TimetableSlot).delete()
+                session.query(TeacherSubject).delete()
+                session.query(ClassTeacher).delete()
+                session.query(StudentBill).delete()
+                session.query(Payment).delete()
+                session.query(Attendance).delete()
+                session.query(LibraryIssue).delete()
+                
+                session.query(Student).delete()
+                session.query(Parent).delete()
+                session.query(Class).delete()
+                session.query(Subject).delete()
+                deleted_modules.append("Academic Records & Students")
+                
+            # 6. Staff Directory
+            if self.chk_staff.isChecked():
+                session.query(Attendance).delete()
+                session.query(LibraryIssue).delete()
+                session.query(TimetableSlot).delete()
+                session.query(TeacherSubject).delete()
+                session.query(ClassTeacher).delete()
+                session.query(Payslip).delete()
+                
+                session.query(Staff).filter(Staff.user_id != self.user.id).delete()
+                session.query(User).filter(User.id != self.user.id).delete()
+                deleted_modules.append("Staff Profiles & Accounts")
+                
+            if not deleted_modules:
+                QMessageBox.warning(self, "No Option Selected", "Please select at least one module to reset.")
+                return
+                
+            session.commit()
+            QMessageBox.information(
+                self, "Selective Reset Complete",
+                "Successfully wiped data from modules:\n- " + "\n- ".join(deleted_modules)
+            )
+            self.reset_pass_input.clear()
+            
+        except Exception as e:
+            session.rollback()
+            QMessageBox.critical(self, "Reset Failed", f"Failed to perform selective module reset:\n{e}")
+        finally:
+            session.close()
