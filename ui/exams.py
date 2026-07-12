@@ -1,7 +1,8 @@
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QFrame, QLabel, 
     QComboBox, QPushButton, QTableWidget, QTableWidgetItem,
-    QHeaderView, QMessageBox, QDialog, QTabWidget, QFileDialog
+    QHeaderView, QMessageBox, QDialog, QTabWidget, QFileDialog,
+    QFormLayout, QTextEdit, QDialogButtonBox
 )
 from PySide6.QtCore import Qt
 from database.connection import get_session
@@ -88,14 +89,15 @@ class ExamsPanel(QWidget):
         print_reports_btn.clicked.connect(self.print_class_report_cards)
         bottom_bar.addWidget(print_reports_btn)
         
-        sms_grades_btn = QPushButton("SMS Grades to Parents")
-        sms_grades_btn.setObjectName("secondary_btn")
-        sms_grades_btn.clicked.connect(self.sms_class_grades)
-        bottom_bar.addWidget(sms_grades_btn)
+        remarks_btn = QPushButton("Add Report Card Remarks")
+        remarks_btn.setObjectName("secondary_btn")
+        remarks_btn.clicked.connect(self.open_remarks_dialog)
+        bottom_bar.addWidget(remarks_btn)
         
         bottom_bar.addStretch()
         layout.addLayout(bottom_bar)
         
+        self.table.setSortingEnabled(True)
         self.tabs.addTab(self.grading_tab, "Mark Sheet & Grading")
         
         # --- TAB 2: Academic Analytics ---
@@ -105,6 +107,10 @@ class ExamsPanel(QWidget):
         
         main_layout.addWidget(self.tabs)
         
+        # --- TAB 3: Class Report Summary ---
+        self.summary_tab = QWidget()
+        self.init_summary_ui()
+        self.tabs.addTab(self.summary_tab, "Class Report Summary")
         self.load_combos()
         
     def load_combos(self):
@@ -114,17 +120,21 @@ class ExamsPanel(QWidget):
             exams = session.query(Examination).all()
             self.exam_combo.clear()
             self.an_exam_combo.clear()
+            self.sum_exam_combo.clear()
             for e in exams:
                 self.exam_combo.addItem(e.name, e.id)
                 self.an_exam_combo.addItem(e.name, e.id)
+                self.sum_exam_combo.addItem(e.name, e.id)
                 
             # Classes
             classes = session.query(Class).all()
             self.class_combo.clear()
             self.an_class_combo.clear()
+            self.sum_class_combo.clear()
             for c in classes:
                 self.class_combo.addItem(c.name, c.id)
                 self.an_class_combo.addItem(c.name, c.id)
+                self.sum_class_combo.addItem(c.name, c.id)
                 
             self.load_subjects_combo()
             self.update_analytics_subjects()
@@ -362,6 +372,7 @@ class ExamsPanel(QWidget):
             QMessageBox.warning(self, "Selection Required", "Please select examination, class, and subject.")
             return
             
+        self.table.setSortingEnabled(False)
         self.updating_table = True
         self.table.setRowCount(0)
         session = get_session()
@@ -415,6 +426,7 @@ class ExamsPanel(QWidget):
             QMessageBox.critical(self, "Error", f"Failed to load mark sheet:\n{e}")
         finally:
             self.updating_table = False
+            self.table.setSortingEnabled(True)
             session.close()
 
     def handle_cell_edit(self, item):
@@ -620,3 +632,254 @@ class ExamsPanel(QWidget):
             
     def refresh(self):
         self.load_combos()
+
+    def open_remarks_dialog(self):
+        selected_row = self.table.currentRow()
+        if selected_row < 0:
+            QMessageBox.warning(self, "Select Student", "Please select a student row in the table first.")
+            return
+            
+        student_id = self.table.item(selected_row, 0).text()
+        student_name = self.table.item(selected_row, 1).text()
+        exam_id = self.exam_combo.currentData()
+        
+        if not exam_id:
+            QMessageBox.warning(self, "No Exam Selected", "Please select an examination first.")
+            return
+            
+        dialog = EditReportRemarksDialog(student_id, student_name, exam_id, self)
+        if dialog.exec() == QDialog.Accepted:
+            QMessageBox.information(self, "Success", "Report card remarks saved successfully.")
+
+    def init_summary_ui(self):
+        s_layout = QVBoxLayout(self.summary_tab)
+        s_layout.setContentsMargins(15, 15, 15, 15)
+        s_layout.setSpacing(15)
+        
+        # Top filters
+        filter_bar = QFrame()
+        fb_layout = QHBoxLayout(filter_bar)
+        fb_layout.setContentsMargins(0, 0, 0, 0)
+        fb_layout.setSpacing(10)
+        
+        fb_layout.addWidget(QLabel("Examination:"))
+        self.sum_exam_combo = QComboBox()
+        fb_layout.addWidget(self.sum_exam_combo, stretch=2)
+        
+        fb_layout.addWidget(QLabel("Class Stream:"))
+        self.sum_class_combo = QComboBox()
+        fb_layout.addWidget(self.sum_class_combo, stretch=2)
+        
+        load_btn = QPushButton("Load Class Summary")
+        load_btn.setObjectName("secondary_btn")
+        load_btn.clicked.connect(self.load_class_summary)
+        fb_layout.addWidget(load_btn)
+        
+        export_btn = QPushButton("Export Summary")
+        export_btn.setObjectName("primary_btn")
+        export_btn.clicked.connect(self.export_class_summary)
+        fb_layout.addWidget(export_btn)
+        
+        fb_layout.addStretch()
+        s_layout.addWidget(filter_bar)
+        
+        # Summary table
+        self.sum_table = QTableWidget()
+        self.sum_table.setSortingEnabled(True)
+        s_layout.addWidget(self.sum_table)
+
+    def load_class_summary(self):
+        exam_id = self.sum_exam_combo.currentData()
+        class_id = self.sum_class_combo.currentData()
+        if not exam_id or not class_id:
+            QMessageBox.warning(self, "Selection Required", "Please select both Examination and Class.")
+            return
+            
+        session = get_session()
+        try:
+            from database.models import Subject, Student, Result
+            cls = session.query(Class).filter(Class.id == class_id).first()
+            if not cls:
+                return
+                
+            subjects = session.query(Subject).filter(Subject.class_level == cls.level).all()
+            subject_names = [sub.name for sub in subjects]
+            subject_ids = [sub.id for sub in subjects]
+            
+            students = session.query(Student).filter(Student.class_id == class_id, Student.status == "Active").all()
+            if not students:
+                self.sum_table.setColumnCount(0)
+                self.sum_table.setRowCount(0)
+                QMessageBox.information(self, "No Data", "No active students found in this class.")
+                return
+                
+            student_ids = [s.id for s in students]
+            results = session.query(Result).filter(
+                Result.examination_id == exam_id,
+                Result.student_id.in_(student_ids)
+            ).all()
+            
+            results_map = {}
+            for r in results:
+                if r.student_id not in results_map:
+                    results_map[r.student_id] = {}
+                results_map[r.student_id][r.subject_id] = r.total_score
+                
+            student_rows = []
+            for s in students:
+                row_data = {
+                    "id": s.id,
+                    "name": f"{s.last_name}, {s.first_name}",
+                    "scores": {}
+                }
+                total = 0.0
+                count = 0
+                for sub_id in subject_ids:
+                    score = results_map.get(s.id, {}).get(sub_id, None)
+                    row_data["scores"][sub_id] = score
+                    if score is not None:
+                        total += score
+                        count += 1
+                row_data["total"] = total
+                row_data["average"] = (total / count) if count > 0 else 0.0
+                student_rows.append(row_data)
+                
+            student_rows.sort(key=lambda x: x["total"], reverse=True)
+            for idx, r in enumerate(student_rows):
+                r["rank"] = idx + 1
+                
+            headers = ["Rank", "Student ID", "Student Name"] + subject_names + ["Total Score", "Average"]
+            self.sum_table.setSortingEnabled(False)
+            self.sum_table.setColumnCount(len(headers))
+            self.sum_table.setHorizontalHeaderLabels(headers)
+            self.sum_table.setRowCount(len(student_rows))
+            
+            for row_idx, r in enumerate(student_rows):
+                self.sum_table.setItem(row_idx, 0, QTableWidgetItem(str(r["rank"])))
+                self.sum_table.setItem(row_idx, 1, QTableWidgetItem(r["id"]))
+                self.sum_table.setItem(row_idx, 2, QTableWidgetItem(r["name"]))
+                
+                col_offset = 3
+                for sub_idx, sub_id in enumerate(subject_ids):
+                    score = r["scores"][sub_id]
+                    score_str = f"{score:.1f}" if score is not None else "-"
+                    self.sum_table.setItem(row_idx, col_offset + sub_idx, QTableWidgetItem(score_str))
+                    
+                self.sum_table.setItem(row_idx, col_offset + len(subject_ids), QTableWidgetItem(f"{r['total']:.1f}"))
+                self.sum_table.setItem(row_idx, col_offset + len(subject_ids) + 1, QTableWidgetItem(f"{r['average']:.1f}"))
+                
+            self.sum_table.setSortingEnabled(True)
+            self.sum_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+            self.sum_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
+            
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to compile class summary:\n{e}")
+        finally:
+            session.close()
+
+    def export_class_summary(self):
+        if self.sum_table.rowCount() == 0:
+            QMessageBox.warning(self, "No Data", "Please load a class report summary first.")
+            return
+            
+        headers = []
+        for col in range(self.sum_table.columnCount()):
+            headers.append(self.sum_table.horizontalHeaderItem(col).text())
+            
+        data = []
+        for row in range(self.sum_table.rowCount()):
+            row_dict = {}
+            for col in range(self.sum_table.columnCount()):
+                item = self.sum_table.item(row, col)
+                row_dict[headers[col]] = item.text() if item else ""
+            data.append(row_dict)
+            
+        file_path, _ = QFileDialog.getSaveFileName(
+            self, "Save Class Report Summary", "class_report_summary.xlsx", "Excel Files (*.xlsx)"
+        )
+        if not file_path:
+            return
+            
+        from utils.exporter import export_to_excel
+        success, message = export_to_excel(data, file_path, "Class Summary")
+        if success:
+            QMessageBox.information(self, "Success", message)
+        else:
+            QMessageBox.warning(self, "Failed", message)
+
+
+class EditReportRemarksDialog(QDialog):
+    def __init__(self, student_id, student_name, exam_id, parent_widget=None):
+        super().__init__(parent_widget)
+        self.student_id = student_id
+        self.exam_id = exam_id
+        self.setWindowTitle(f"Report Card Remarks - {student_name}")
+        self.setMinimumWidth(500)
+        self.init_ui()
+        self.load_data()
+        
+    def init_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(15, 15, 15, 15)
+        layout.setSpacing(15)
+        
+        form = QFormLayout()
+        
+        self.teacher_input = QTextEdit()
+        self.teacher_input.setPlaceholderText("Enter Class Teacher remarks here...")
+        form.addRow("Class Teacher Remark:", self.teacher_input)
+        
+        self.headteacher_input = QTextEdit()
+        self.headteacher_input.setPlaceholderText("Enter Headteacher remarks here...")
+        form.addRow("Headteacher Remark:", self.headteacher_input)
+        
+        layout.addLayout(form)
+        
+        buttons = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Cancel)
+        buttons.accepted.connect(self.save_data)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+        
+    def load_data(self):
+        session = get_session()
+        try:
+            from database.models import StudentReportRemark
+            remark = session.query(StudentReportRemark).filter(
+                StudentReportRemark.student_id == self.student_id,
+                StudentReportRemark.examination_id == self.exam_id
+            ).first()
+            if remark:
+                self.teacher_input.setText(remark.teacher_remark or "")
+                self.headteacher_input.setText(remark.headteacher_remark or "")
+        except Exception as e:
+            print(f"Error loading remarks: {e}")
+        finally:
+            session.close()
+            
+    def save_data(self):
+        teacher_text = self.teacher_input.toPlainText().strip()
+        headteacher_text = self.headteacher_input.toPlainText().strip()
+        
+        session = get_session()
+        try:
+            from database.models import StudentReportRemark
+            remark = session.query(StudentReportRemark).filter(
+                StudentReportRemark.student_id == self.student_id,
+                StudentReportRemark.examination_id == self.exam_id
+            ).first()
+            
+            if not remark:
+                remark = StudentReportRemark(
+                    student_id=self.student_id,
+                    examination_id=self.exam_id
+                )
+                session.add(remark)
+                
+            remark.teacher_remark = teacher_text or None
+            remark.headteacher_remark = headteacher_text or None
+            session.commit()
+            self.accept()
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to save remarks:\n{e}")
+        finally:
+            session.close()

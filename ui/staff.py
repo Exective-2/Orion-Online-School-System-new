@@ -49,6 +49,11 @@ class StaffPanel(QWidget):
         add_staff_btn.clicked.connect(self.open_register_dialog)
         top_bar_layout.addWidget(add_staff_btn)
         
+        bulk_upload_btn = QPushButton("Bulk Upload")
+        bulk_upload_btn.setObjectName("secondary_btn")
+        bulk_upload_btn.clicked.connect(self.bulk_upload_staff)
+        top_bar_layout.addWidget(bulk_upload_btn)
+        
         layout.addWidget(top_bar)
         
         # Table listing staff members
@@ -73,6 +78,7 @@ class StaffPanel(QWidget):
         self.load_staff()
         
     def load_staff(self):
+        self.table.setSortingEnabled(False)
         self.table.setRowCount(0)
         session = get_session()
         try:
@@ -106,6 +112,7 @@ class StaffPanel(QWidget):
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to load staff:\n{str(e)}")
         finally:
+            self.table.setSortingEnabled(True)
             session.close()
 
     def view_staff_details(self, row, col):
@@ -661,5 +668,139 @@ class RegisterStaffDialog(QDialog):
             QMessageBox.critical(self, "Error", f"Failed to register staff:\n{e}")
         finally:
             session.close()
+
+    def bulk_upload_staff(self):
+        file_path, _ = QFileDialog.getOpenFileName(
+            self, "Bulk Upload Staff", "", "Data Files (*.csv *.xlsx *.xls)"
+        )
+        if not file_path:
+            return
+            
+        import pandas as pd
+        try:
+            if file_path.endswith('.csv'):
+                df = pd.read_csv(file_path)
+            else:
+                df = pd.read_excel(file_path)
+                
+            # Verify columns
+            required_cols = {'first_name', 'last_name', 'phone', 'role_title'}
+            missing = required_cols - set(df.columns)
+            if missing:
+                QMessageBox.warning(
+                    self, "Invalid File Structure",
+                    f"The file is missing the following required columns: {', '.join(missing)}\n\n"
+                    "Supported optional columns: other_names, email, department, qualification, address, base_salary"
+                )
+                return
+                
+            session = get_session()
+            imported_count = 0
+            
+            # Roles for mapping
+            from database.models import Role, User
+            from database.seed import hash_password
+            roles = {r.name.lower(): r.id for r in session.query(Role).all()}
+            
+            role_mapping = {
+                "teacher": "teacher",
+                "accountant": "accountant",
+                "librarian": "librarian",
+                "storekeeper": "storekeeper",
+                "headteacher": "admin/headteacher",
+                "admin officer": "admin/headteacher"
+            }
+            
+            for _, row in df.iterrows():
+                fname = str(row['first_name']).strip()
+                lname = str(row['last_name']).strip()
+                if not fname or not lname or fname == 'nan' or lname == 'nan':
+                    continue
+                    
+                phone = str(row['phone']).strip()
+                role_title = str(row['role_title']).strip()
+                
+                email = str(row.get('email', '')).strip() or None
+                if email == 'nan':
+                    email = None
+                    
+                dept = str(row.get('department', '')).strip() or None
+                if dept == 'nan':
+                    dept = None
+                    
+                qual = str(row.get('qualification', '')).strip() or None
+                if qual == 'nan':
+                    qual = None
+                    
+                addr = str(row.get('address', '')).strip() or None
+                if addr == 'nan':
+                    addr = None
+                    
+                salary_val = row.get('base_salary', 0.0)
+                try:
+                    salary = float(salary_val) if not pd.isna(salary_val) else 0.0
+                except Exception:
+                    salary = 0.0
+                
+                # Check if phone already registered to avoid duplicates
+                existing_staff = session.query(Staff).filter(Staff.phone == phone).first()
+                if existing_staff:
+                    continue
+                
+                # Generate unique username
+                base_username = f"{fname.lower()}.{lname.lower()}"
+                username = base_username
+                idx = 1
+                while session.query(User).filter(User.username == username).first():
+                    username = f"{base_username}{idx}"
+                    idx += 1
+                
+                # Resolve role id
+                mapped_role_name = role_mapping.get(role_title.lower(), "teacher")
+                role_id = roles.get(mapped_role_name)
+                if not role_id:
+                    role_id = list(roles.values())[0] if roles else None
+                
+                # Create user
+                new_user = User(
+                    username=username,
+                    password_hash=hash_password("Orion@123"), # default password
+                    email=email,
+                    role_id=role_id,
+                    is_active=True
+                )
+                session.add(new_user)
+                session.flush()
+                
+                new_staff = Staff(
+                    user_id=new_user.id,
+                    first_name=fname,
+                    last_name=lname,
+                    other_names=str(row.get('other_names', '')).strip() or None,
+                    email=email,
+                    phone=phone,
+                    role_title=role_title,
+                    department=dept,
+                    hire_date=datetime.date.today(),
+                    status="Active",
+                    address=addr,
+                    qualification=qual,
+                    base_salary=salary
+                )
+                session.add(new_staff)
+                imported_count += 1
+                
+            session.commit()
+            session.close()
+            
+            QMessageBox.information(
+                self, "Import Complete",
+                f"Successfully imported {imported_count} staff member(s) from the file.\n"
+                "Corresponding user accounts have been created with the default password: Orion@123"
+            )
+            self.load_staff()
+            
+        except Exception as e:
+            QMessageBox.critical(self, "Import Error", f"Failed to import staff:\n{e}")
 
 

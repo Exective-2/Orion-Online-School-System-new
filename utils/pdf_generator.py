@@ -8,7 +8,7 @@ from reportlab.lib import colors
 from reportlab.lib.units import inch, mm
 
 from database.connection import get_session
-from database.models import Student, Parent, Class, Payment, StudentBill, Examination, Result, AcademicYear, Term, Subject, Fee, Staff, Expense
+from database.models import Student, Parent, Class, Payment, StudentBill, Examination, Result, AcademicYear, Term, Subject, Fee, Staff, Expense, StudentReportRemark
 from config import config
 
 # Output folder for PDFs — resolved lazily so mkdir() never runs at import time
@@ -518,11 +518,20 @@ def generate_report_card(student_id: str, examination_id: int, output_path: str 
         total_grade_units = sum(int(r.grade or 9) for r in results) if results else 0
         overall_gpa_text = f"Grade Point Sum: {total_grade_units} across {total_subjects} subjects." if results else "No graded subjects."
         
+        # Fetch custom remarks if available
+        remark_rec = session.query(StudentReportRemark).filter(
+            StudentReportRemark.student_id == student_id,
+            StudentReportRemark.examination_id == examination_id
+        ).first()
+        
+        teacher_remark_val = remark_rec.teacher_remark if (remark_rec and remark_rec.teacher_remark) else "Promising performance. Shows diligence and effort. Keep up the high standard."
+        headteacher_remark_val = remark_rec.headteacher_remark if (remark_rec and remark_rec.headteacher_remark) else "Satisfactory progress made during the term. Approved for promotional transition."
+
         summary_block = [
             [Paragraph(f"<b>Overall Academic Performance Summary:</b>", ParagraphStyle('SBold', parent=body_style, fontName='Helvetica-Bold')), ""],
             [Paragraph(overall_gpa_text, body_style), ""],
-            [Paragraph("<b>Class Teacher Remarks:</b> Promising performance. Shows diligence and effort. Keep up the high standard.", body_style), ""],
-            [Paragraph("<b>Headteacher Remarks:</b> Satisfactory progress made during the term. Approved for promotional transition.", body_style), ""]
+            [Paragraph(f"<b>Class Teacher Remarks:</b> {teacher_remark_val}", body_style), ""],
+            [Paragraph(f"<b>Headteacher Remarks:</b> {headteacher_remark_val}", body_style), ""]
         ]
         t_sum = Table(summary_block, colWidths=[3.5*inch, 3.5*inch])
         t_sum.setStyle(TableStyle([

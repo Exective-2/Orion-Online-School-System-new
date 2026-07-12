@@ -416,3 +416,17 @@ class Payslip(Base):
     
     staff = relationship("Staff", back_populates="payslips")
 
+
+class StudentReportRemark(Base):
+    __tablename__ = "student_report_remarks"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    student_id = Column(String(30), ForeignKey("students.id", ondelete="CASCADE"), nullable=False)
+    examination_id = Column(Integer, ForeignKey("examinations.id", ondelete="CASCADE"), nullable=False)
+    teacher_remark = Column(String(500), nullable=True)
+    headteacher_remark = Column(String(500), nullable=True)
+    
+    student = relationship("Student")
+    examination = relationship("Examination")
+
+

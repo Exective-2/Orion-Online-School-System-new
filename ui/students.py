@@ -67,6 +67,11 @@ class StudentsPanel(QWidget):
         add_student_btn.clicked.connect(self.open_admit_dialog)
         top_bar_layout.addWidget(add_student_btn)
         
+        bulk_upload_btn = QPushButton("Bulk Upload")
+        bulk_upload_btn.setObjectName("secondary_btn")
+        bulk_upload_btn.clicked.connect(self.bulk_upload_students)
+        top_bar_layout.addWidget(bulk_upload_btn)
+        
         layout.addWidget(top_bar)
         
         # Table list of students
@@ -146,6 +151,7 @@ class StudentsPanel(QWidget):
             session.close()
 
     def load_students(self):
+        self.table.setSortingEnabled(False)
         self.table.setRowCount(0)
         session = get_session()
         try:
@@ -204,6 +210,7 @@ class StudentsPanel(QWidget):
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to load students:\n{str(e)}")
         finally:
+            self.table.setSortingEnabled(True)
             session.close()
 
     def get_next_class_level(self, current_name: str) -> str | None:
@@ -386,6 +393,125 @@ class StudentsPanel(QWidget):
         dialog = AdmitStudentDialog(self)
         dialog.data_changed.connect(self.load_students)
         dialog.exec()
+
+    def bulk_upload_students(self):
+        file_path, _ = QFileDialog.getOpenFileName(
+            self, "Bulk Upload Students", "", "Data Files (*.csv *.xlsx *.xls)"
+        )
+        if not file_path:
+            return
+            
+        import pandas as pd
+        try:
+            if file_path.endswith('.csv'):
+                df = pd.read_csv(file_path)
+            else:
+                df = pd.read_excel(file_path)
+                
+            # Verify columns
+            required_cols = {'first_name', 'last_name', 'gender', 'date_of_birth'}
+            missing = required_cols - set(df.columns)
+            if missing:
+                QMessageBox.warning(
+                    self, "Invalid File Structure",
+                    f"The file is missing the following required columns: {', '.join(missing)}\n\n"
+                    "Supported optional columns: other_names, class_name, parent_name, parent_phone, parent_email, emergency_contact_name, emergency_contact_phone"
+                )
+                return
+                
+            session = get_session()
+            imported_count = 0
+            
+            # Preload classes and parents
+            from database.models import Class, Parent
+            classes = {c.name.lower(): c.id for c in session.query(Class).all()}
+            parents_by_phone = {p.phone: p.id for p in session.query(Parent).filter(Parent.phone != None).all()}
+            
+            year = datetime.datetime.now().year
+            current_count = session.query(Student).count()
+            
+            for _, row in df.iterrows():
+                fname = str(row['first_name']).strip()
+                lname = str(row['last_name']).strip()
+                if not fname or not lname or fname == 'nan' or lname == 'nan':
+                    continue
+                    
+                gender = str(row['gender']).strip()
+                dob_str = str(row['date_of_birth']).strip()
+                try:
+                    dob_date = pd.to_datetime(dob_str).date()
+                except Exception:
+                    dob_date = datetime.date(2010, 1, 1)
+                
+                # Check class
+                class_id = None
+                if 'class_name' in row and not pd.isna(row['class_name']):
+                    cls_name = str(row['class_name']).strip().lower()
+                    if cls_name in classes:
+                        class_id = classes[cls_name]
+                    else:
+                        new_cls = Class(name=str(row['class_name']).strip())
+                        session.add(new_cls)
+                        session.flush()
+                        classes[cls_name] = new_cls.id
+                        class_id = new_cls.id
+                        
+                # Check parent
+                parent_id = None
+                if 'parent_phone' in row and not pd.isna(row['parent_phone']):
+                    p_phone = str(row['parent_phone']).strip()
+                    if p_phone in parents_by_phone:
+                        parent_id = parents_by_phone[p_phone]
+                    else:
+                        p_name = str(row.get('parent_name', 'Parent Name')).strip()
+                        parts = p_name.split(None, 1)
+                        p_fname = parts[0] if parts else "Parent"
+                        p_lname = parts[1] if len(parts) > 1 else "Name"
+                        new_parent = Parent(
+                            first_name=p_fname,
+                            last_name=p_lname,
+                            phone=p_phone,
+                            email=str(row.get('parent_email', '')).strip() or None
+                        )
+                        session.add(new_parent)
+                        session.flush()
+                        parents_by_phone[p_phone] = new_parent.id
+                        parent_id = new_parent.id
+                
+                other_names = str(row['other_names']).strip() if ('other_names' in row and not pd.isna(row['other_names'])) else None
+                if other_names == 'nan':
+                    other_names = None
+                    
+                student_id = f"SMS-{year}-{(current_count + imported_count + 1):04d}"
+                
+                new_student = Student(
+                    id=student_id,
+                    first_name=fname,
+                    last_name=lname,
+                    other_names=other_names,
+                    date_of_birth=dob_date,
+                    gender=gender,
+                    class_id=class_id,
+                    parent_id=parent_id,
+                    admission_date=datetime.date.today(),
+                    status="Active",
+                    emergency_contact_name=str(row.get('emergency_contact_name', '')).strip() or None,
+                    emergency_contact_phone=str(row.get('emergency_contact_phone', '')).strip() or None
+                )
+                session.add(new_student)
+                imported_count += 1
+                
+            session.commit()
+            session.close()
+            
+            QMessageBox.information(
+                self, "Import Complete",
+                f"Successfully imported {imported_count} student(s) from the file."
+            )
+            self.load_students()
+            
+        except Exception as e:
+            QMessageBox.critical(self, "Import Error", f"Failed to import students:\n{e}")
 
 class StudentProfileDialog(QDialog):
     data_changed = Signal()
