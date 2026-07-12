@@ -603,6 +603,194 @@ def generate_report_card(student_id: str, examination_id: int, output_path: str 
     except Exception as e:
         return False, str(e)
 
+def generate_class_report_cards(class_id: int, examination_id: int, output_path: str = None) -> tuple[bool, str]:
+    """
+    Generates a single merged PDF containing all student report cards for a class, separated by page breaks.
+    """
+    try:
+        session = get_session()
+        cls = session.query(Class).filter(Class.id == class_id).first()
+        exam = session.query(Examination).filter(Examination.id == examination_id).first()
+        if not cls or not exam:
+            return False, "Class or Examination session not found."
+            
+        students = session.query(Student).filter(Student.class_id == class_id, Student.status == "Active").all()
+        if not students:
+            return False, "No active students found in this class."
+            
+        file_path = Path(output_path) if output_path else _get_pdf_dir() / f"class_report_cards_class_{class_id}_exam_{examination_id}.pdf"
+        
+        doc = SimpleDocTemplate(
+            str(file_path),
+            pagesize=A4,
+            leftMargin=0.75*inch,
+            rightMargin=0.75*inch,
+            topMargin=0.75*inch,
+            bottomMargin=0.75*inch
+        )
+        
+        styles = getSampleStyleSheet()
+        body_style = ParagraphStyle(
+            'BodyClass',
+            fontName='Helvetica',
+            fontSize=9,
+            textColor=colors.HexColor("#334155")
+        )
+        th_style = ParagraphStyle(
+            'TableHeaderClass',
+            parent=body_style,
+            fontName='Helvetica-Bold',
+            textColor=colors.white
+        )
+        
+        # Compute student positions & stats for the class
+        class_student_ids = [s.id for s in students]
+        all_results = session.query(Result).filter(
+            Result.examination_id == examination_id,
+            Result.student_id.in_(class_student_ids)
+        ).all()
+        
+        totals = {}
+        subject_counts = {}
+        for r in all_results:
+            totals[r.student_id] = totals.get(r.student_id, 0.0) + r.total_score
+            subject_counts[r.student_id] = subject_counts.get(r.student_id, 0) + 1
+            
+        for s_id in class_student_ids:
+            if s_id not in totals:
+                totals[s_id] = 0.0
+                subject_counts[s_id] = 0
+                
+        sorted_totals = sorted(totals.items(), key=lambda x: x[1], reverse=True)
+        
+        ranks = {}
+        curr_rank = 1
+        for idx, (s_id, tot) in enumerate(sorted_totals):
+            if idx > 0 and tot < sorted_totals[idx - 1][1]:
+                curr_rank = idx + 1
+            ranks[s_id] = curr_rank
+            
+        def get_rank_suffix(rank):
+            if 11 <= rank % 100 <= 13:
+                suffix = "th"
+            else:
+                suffix = {1: "st", 2: "nd", 3: "rd"}.get(rank % 10, "th")
+            return f"{rank}{suffix}"
+            
+        story = []
+        
+        for idx, student in enumerate(students):
+            if idx > 0:
+                story.append(PageBreak())
+                
+            add_pdf_header(story, f"STUDENT TERMINAL REPORT CARD - {exam.name}")
+            
+            pos = ranks.get(student.id, 0)
+            pos_text = f"{get_rank_suffix(pos)} out of {len(class_student_ids)}" if pos > 0 else "N/A"
+            student_avg = (totals.get(student.id, 0.0) / subject_counts.get(student.id, 1)) if subject_counts.get(student.id, 0) > 0 else 0.0
+            
+            # Student Meta Grid
+            cls_name = cls.name
+            meta_data = [
+                [Paragraph(f"<b>Student ID:</b> {student.id}", body_style), Paragraph(f"<b>Student Name:</b> {student.first_name} {student.last_name}", body_style)],
+                [Paragraph(f"<b>Class Stream:</b> {cls_name}", body_style), Paragraph(f"<b>Academic Session:</b> {exam.academic_year.name} - {exam.term.name}", body_style)],
+                [Paragraph(f"<b>Class Position:</b> {pos_text}", body_style), Paragraph(f"<b>Average Score:</b> {student_avg:.1f}%", body_style)]
+            ]
+            t_meta = Table(meta_data, colWidths=[3.5*inch, 3.5*inch])
+            t_meta.setStyle(TableStyle([
+                ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor("#cbd5e1")),
+                ('PADDING', (0,0), (-1,-1), 6),
+            ]))
+            story.append(t_meta)
+            story.append(Spacer(1, 15))
+            
+            # Results Table Header
+            results_header = [
+                Paragraph("<b>Subject Code</b>", th_style),
+                Paragraph("<b>Subject Title</b>", th_style),
+                Paragraph("<b>Class Score (30)</b>", th_style),
+                Paragraph("<b>Exam Score (70)</b>", th_style),
+                Paragraph("<b>Total (100)</b>", th_style),
+                Paragraph("<b>Grade</b>", th_style),
+                Paragraph("<b>Remarks</b>", th_style)
+            ]
+            
+            table_rows = [results_header]
+            
+            student_results = [r for r in all_results if r.student_id == student.id]
+            
+            if not student_results:
+                table_rows.append([Paragraph("No exam result records submitted for this period.", body_style)] + [""] * 6)
+            else:
+                for r in student_results:
+                    table_rows.append([
+                        Paragraph(r.subject.code, body_style),
+                        Paragraph(r.subject.name, body_style),
+                        Paragraph(f"{r.class_score:.1f}", body_style),
+                        Paragraph(f"{r.exam_score:.1f}", body_style),
+                        Paragraph(f"{r.total_score:.1f}", ParagraphStyle('TotalBoldClass', parent=body_style, fontName='Helvetica-Bold')),
+                        Paragraph(r.grade or "9", ParagraphStyle('GStyleClass', parent=body_style, alignment=1)),
+                        Paragraph(r.remarks or "", body_style)
+                    ])
+                    
+            t_res = Table(table_rows, colWidths=[1.0*inch, 2.0*inch, 1.0*inch, 1.0*inch, 0.8*inch, 0.6*inch, 1.6*inch])
+            t_res.setStyle(TableStyle([
+                ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#2563eb")),
+                ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor("#94a3b8")),
+                ('ROWBACKGROUNDS', (0,1), (-1,-1), [colors.white, colors.HexColor("#f8fafc")]),
+                ('PADDING', (0,0), (-1,-1), 6),
+                ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+            ]))
+            
+            if not student_results:
+                t_res.setStyle(TableStyle([('SPAN', (0,1), (6,1))]))
+                
+            story.append(t_res)
+            story.append(Spacer(1, 30))
+            
+            total_subjects = len(student_results)
+            total_grade_units = sum(int(r.grade or 9) for r in student_results) if student_results else 0
+            overall_gpa_text = f"Grade Point Sum: {total_grade_units} across {total_subjects} subjects." if student_results else "No graded subjects."
+            
+            # Fetch custom remarks if available
+            remark_rec = session.query(StudentReportRemark).filter(
+                StudentReportRemark.student_id == student.id,
+                StudentReportRemark.examination_id == examination_id
+            ).first()
+            
+            teacher_remark_val = remark_rec.teacher_remark if (remark_rec and remark_rec.teacher_remark) else "Promising performance. Shows diligence and effort. Keep up the high standard."
+            headteacher_remark_val = remark_rec.headteacher_remark if (remark_rec and remark_rec.headteacher_remark) else "Satisfactory progress made during the term. Approved for promotional transition."
+            
+            summary_block = [
+                [Paragraph(f"<b>Overall Academic Performance Summary:</b>", ParagraphStyle('SBoldClass', parent=body_style, fontName='Helvetica-Bold')), ""],
+                [Paragraph(overall_gpa_text, body_style), ""],
+                [Paragraph(f"<b>Class Teacher Remarks:</b> {teacher_remark_val}", body_style), ""],
+                [Paragraph(f"<b>Headteacher Remarks:</b> {headteacher_remark_val}", body_style), ""]
+            ]
+            t_sum = Table(summary_block, colWidths=[3.5*inch, 3.5*inch])
+            t_sum.setStyle(TableStyle([
+                ('SPAN', (0,0), (1,0)),
+                ('SPAN', (0,1), (1,1)),
+                ('SPAN', (0,2), (1,2)),
+                ('SPAN', (0,3), (1,3)),
+                ('PADDING', (0,0), (-1,-1), 4),
+            ]))
+            story.append(t_sum)
+            story.append(Spacer(1, 40))
+            
+            sig_data = [
+                [Paragraph("_____________________________<br/><b>Class Teacher Signature</b>", ParagraphStyle('Sig1Class', parent=body_style, alignment=0)),
+                 Paragraph("_____________________________<br/><b>Headteacher Endorsement</b>", ParagraphStyle('Sig2Class', parent=body_style, alignment=2))]
+            ]
+            t_sig = Table(sig_data, colWidths=[3.5*inch, 3.5*inch])
+            story.append(t_sig)
+            
+        doc.build(story)
+        session.close()
+        return True, str(file_path)
+    except Exception as e:
+        return False, str(e)
+
 def generate_financial_statement(output_path: str = None) -> tuple[bool, str]:
     """
     Compiles all system payments and operational expenses into a Financial PDF Ledger sheet.

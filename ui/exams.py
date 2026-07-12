@@ -7,7 +7,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt
 from database.connection import get_session
 from database.models import Student, Subject, Class, Examination, Result, SMSLog
-from utils.pdf_generator import generate_report_card
+from utils.pdf_generator import generate_report_card, generate_class_report_cards
 from config import config
 
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
@@ -564,26 +564,53 @@ class ExamsPanel(QWidget):
             session.close()
 
     def print_class_report_cards(self):
-        # Open dialog selection of student report cards to print
-        selected_row = self.table.currentRow()
-        if selected_row < 0:
-            QMessageBox.warning(self, "Select Student", "Please select a student row in the table first.")
-            return
-            
-        student_id = self.table.item(selected_row, 0).text()
-        exam_id = self.exam_combo.currentData()
+        # Ask user if they want to print for selected student or entire class
+        msg_box = QMessageBox(self)
+        msg_box.setWindowTitle("Print Terminal Reports")
+        msg_box.setText("Do you want to print report cards for the selected student or the entire class?")
+        selected_btn = msg_box.addButton("Selected Student", QMessageBox.ButtonRole.ActionRole)
+        entire_btn = msg_box.addButton("Entire Class", QMessageBox.ButtonRole.ActionRole)
+        cancel_btn = msg_box.addButton("Cancel", QMessageBox.ButtonRole.RejectRole)
         
-        file_path, _ = QFileDialog.getSaveFileName(
-            self, "Save Report Card", f"report_card_{student_id}_exam_{exam_id}.pdf", "PDF Files (*.pdf)"
-        )
-        if not file_path:
+        msg_box.exec()
+        
+        if msg_box.clickedButton() == cancel_btn:
             return
             
-        success, filepath = generate_report_card(student_id, exam_id, file_path)
-        if success:
-            QMessageBox.information(self, "Success", f"Terminal Report Card PDF generated at:\n{filepath}")
-        else:
-            QMessageBox.warning(self, "Failed", f"Failed to generate report card:\n{filepath}")
+        exam_id = self.exam_combo.currentData()
+        class_id = self.class_combo.currentData()
+        if not exam_id or not class_id:
+            QMessageBox.warning(self, "Selection Required", "Please select examination and class first.")
+            return
+            
+        if msg_box.clickedButton() == selected_btn:
+            selected_row = self.table.currentRow()
+            if selected_row < 0:
+                QMessageBox.warning(self, "Select Student", "Please select a student row in the table first.")
+                return
+            student_id = self.table.item(selected_row, 0).text()
+            file_path, _ = QFileDialog.getSaveFileName(
+                self, "Save Report Card", f"report_card_{student_id}_exam_{exam_id}.pdf", "PDF Files (*.pdf)"
+            )
+            if not file_path:
+                return
+            success, filepath = generate_report_card(student_id, exam_id, file_path)
+            if success:
+                QMessageBox.information(self, "Success", f"Terminal Report Card PDF generated at:\n{filepath}")
+            else:
+                QMessageBox.warning(self, "Failed", f"Failed to generate report card:\n{filepath}")
+                
+        elif msg_box.clickedButton() == entire_btn:
+            file_path, _ = QFileDialog.getSaveFileName(
+                self, "Save Class Report Cards", f"class_report_cards_class_{class_id}_exam_{exam_id}.pdf", "PDF Files (*.pdf)"
+            )
+            if not file_path:
+                return
+            success, filepath = generate_class_report_cards(class_id, exam_id, file_path)
+            if success:
+                QMessageBox.information(self, "Success", f"All Class Report Cards compiled successfully into:\n{filepath}")
+            else:
+                QMessageBox.warning(self, "Failed", f"Failed to generate class report cards:\n{filepath}")
             
     def sms_class_grades(self):
         selected_row = self.table.currentRow()
