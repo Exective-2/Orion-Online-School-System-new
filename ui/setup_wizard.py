@@ -290,17 +290,14 @@ class SetupWizardDialog(QDialog):
         
         try:
             # 1. Process Logo Image copy
-            logo_rel_path = ""
+            logo_path = ""
             if self.selected_logo_path:
-                project_dir = Path(__file__).resolve().parent.parent
-                assets_dir = project_dir / "assets"
-                assets_dir.mkdir(exist_ok=True)
-                
+                from config import DATA_DIR
                 ext = Path(self.selected_logo_path).suffix
-                dest_file = assets_dir / f"school_logo{ext}"
+                dest_file = DATA_DIR / f"school_logo{ext}"
                 try:
-                    shutil.copy(self.selected_logo_path, dest_file)
-                    logo_rel_path = f"assets/school_logo{ext}"
+                    shutil.copy2(self.selected_logo_path, dest_file)
+                    logo_path = str(dest_file)
                 except Exception as e:
                     print(f"Error copying school logo: {e}")
             
@@ -328,7 +325,7 @@ class SetupWizardDialog(QDialog):
             config["school_email"] = self.school_email_input.text().strip()
             config["school_phone"] = self.school_phone_input.text().strip()
             config["school_address"] = self.school_address_input.text().strip()
-            config["school_logo"] = logo_rel_path
+            config["school_logo"] = logo_path
             config["setup_completed"] = True
             
             save_config(config)

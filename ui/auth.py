@@ -2,7 +2,7 @@ import hashlib
 import os
 from PySide6.QtWidgets import (
     QWidget, QLabel, QLineEdit, QPushButton, QVBoxLayout, 
-    QHBoxLayout, QFrame, QMessageBox, QApplication
+    QHBoxLayout, QFrame, QMessageBox, QApplication, QDialog
 )
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QPixmap
@@ -80,12 +80,20 @@ class LoginWindow(QWidget):
         self.help_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.help_label.setStyleSheet("font-size: 11px; color: #64748b; margin-top: 10px;")
         
+        # Run Setup Wizard button/link
+        self.setup_wizard_btn = QPushButton("System Setup Wizard (First-time installation)")
+        self.setup_wizard_btn.setObjectName("link_btn")
+        self.setup_wizard_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setup_wizard_btn.clicked.connect(self.run_setup_wizard)
+        self.setup_wizard_btn.setStyleSheet("color: #3b82f6; background: transparent; border: none; font-size: 11px; text-decoration: underline; margin-top: 5px;")
+        
         card_layout.addWidget(self.logo_label)
         card_layout.addWidget(self.subtitle_label)
         card_layout.addWidget(self.username_input)
         card_layout.addWidget(self.password_input)
         card_layout.addWidget(self.login_btn)
         card_layout.addWidget(self.help_label)
+        card_layout.addWidget(self.setup_wizard_btn)
         
         main_layout.addWidget(card)
         
@@ -134,6 +142,22 @@ class LoginWindow(QWidget):
             QMessageBox.critical(self, "Database Error", f"An error occurred during authentication:\n{str(e)}")
         finally:
             session.close()
+
+    def run_setup_wizard(self):
+        from ui.setup_wizard import SetupWizardDialog
+        wizard = SetupWizardDialog(self)
+        if wizard.exec() == QDialog.DialogCode.Accepted:
+            # Reload configuration details and apply updates on UI
+            from config import load_config
+            new_config = load_config()
+            self.subtitle_label.setText(new_config.get("school_name", "School Management System"))
+            logo_path = new_config.get("school_logo", "")
+            if logo_path and os.path.exists(logo_path):
+                pixmap = QPixmap(logo_path)
+                scaled = pixmap.scaled(80, 80, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+                self.logo_label.setPixmap(scaled)
+            else:
+                self.logo_label.setText("ORION")
 
     def keyPressEvent(self, event):
         # Enter key triggers login
