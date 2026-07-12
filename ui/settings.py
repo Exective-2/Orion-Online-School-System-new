@@ -72,11 +72,22 @@ class SettingsPanel(QWidget):
         self.phone_input = QLineEdit()
         self.address_input = QLineEdit()
         
+        self.logo_path_label = QLabel("No logo uploaded")
+        self.logo_path_label.setStyleSheet("color: #64748b; font-style: italic;")
+        self.upload_logo_btn = QPushButton("Upload Logo")
+        self.upload_logo_btn.setObjectName("secondary_btn")
+        self.upload_logo_btn.clicked.connect(self.upload_logo)
+        
+        logo_layout = QHBoxLayout()
+        logo_layout.addWidget(self.logo_path_label, stretch=3)
+        logo_layout.addWidget(self.upload_logo_btn, stretch=1)
+        
         form_layout.addRow("School Name:", self.name_input)
         form_layout.addRow("School Motto / Slogan:", self.motto_input)
         form_layout.addRow("School Email Address:", self.email_input)
         form_layout.addRow("School Contact Phone:", self.phone_input)
         form_layout.addRow("School Physical Address:", self.address_input)
+        form_layout.addRow("School Logo Image:", logo_layout)
         
         tab_layout.addWidget(form_frame)
         
@@ -95,6 +106,22 @@ class SettingsPanel(QWidget):
         self.phone_input.setText(config.get("school_phone", ""))
         self.address_input.setText(config.get("school_address", ""))
         
+        logo_path = config.get("school_logo", "")
+        if logo_path:
+            self.logo_path_label.setText(Path(logo_path).name)
+            self.selected_logo_path = logo_path
+        else:
+            self.logo_path_label.setText("No logo uploaded")
+            self.selected_logo_path = None
+            
+    def upload_logo(self):
+        file_path, _ = QFileDialog.getOpenFileName(
+            self, "Select School Logo", "", "Image Files (*.png *.jpg *.jpeg *.bmp)"
+        )
+        if file_path:
+            self.logo_path_label.setText(Path(file_path).name)
+            self.selected_logo_path = file_path
+        
     def save_branding(self):
         config["school_name"] = self.name_input.text().strip()
         config["school_motto"] = self.motto_input.text().strip()
@@ -102,6 +129,26 @@ class SettingsPanel(QWidget):
         config["school_phone"] = self.phone_input.text().strip()
         config["school_address"] = self.address_input.text().strip()
         
+        # Copy selected logo to DATA_DIR if it's new
+        if hasattr(self, 'selected_logo_path') and self.selected_logo_path:
+            from config import DATA_DIR
+            import shutil
+            
+            src_path = self.selected_logo_path
+            if not src_path.startswith(str(DATA_DIR)):
+                ext = Path(src_path).suffix
+                dest_path = DATA_DIR / f"school_logo{ext}"
+                try:
+                    shutil.copy2(src_path, dest_path)
+                    config["school_logo"] = str(dest_path)
+                except Exception as e:
+                    QMessageBox.warning(self, "Warning", f"Could not copy logo to data folder: {e}")
+                    config["school_logo"] = src_path
+            else:
+                config["school_logo"] = src_path
+        else:
+            config["school_logo"] = ""
+            
         if save_config(config):
             QMessageBox.information(self, "Success", "School profile details updated successfully.")
         else:

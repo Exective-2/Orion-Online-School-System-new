@@ -28,7 +28,10 @@ def add_pdf_header(story, title_text=None):
     from reportlab.platypus import Image
     
     logo_path = config.get("school_logo", "")
-    logo_file = os.path.join(os.path.dirname(os.path.dirname(__file__)), logo_path) if logo_path else ""
+    if logo_path and os.path.isabs(logo_path):
+        logo_file = logo_path
+    else:
+        logo_file = os.path.join(os.path.dirname(os.path.dirname(__file__)), logo_path) if logo_path else ""
     logo_exists = logo_path and os.path.exists(logo_file)
     
     school_name = config.get("school_name", "Orion School System")
