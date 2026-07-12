@@ -1034,3 +1034,73 @@ def generate_payslip_pdf(payslip, output_path: str = None):
         return str(file_path), None
     except Exception as e:
         return None, str(e)
+
+def generate_class_summary_pdf(class_name: str, exam_name: str, headers: list, rows: list, output_path: str = None) -> tuple[bool, str]:
+    """
+    Generates a Landscape A4 PDF containing the class report summary table.
+    """
+    try:
+        file_path = Path(output_path) if output_path else _get_pdf_dir() / "class_report_summary.pdf"
+        
+        from reportlab.lib.pagesizes import A4, landscape
+        doc = SimpleDocTemplate(
+            str(file_path),
+            pagesize=landscape(A4),
+            leftMargin=36,
+            rightMargin=36,
+            topMargin=36,
+            bottomMargin=36
+        )
+        
+        styles = getSampleStyleSheet()
+        body_style = ParagraphStyle(
+            'BodySummary',
+            fontName='Helvetica',
+            fontSize=7,
+            textColor=colors.HexColor("#334155")
+        )
+        th_style = ParagraphStyle(
+            'TableHeaderSummary',
+            parent=body_style,
+            fontName='Helvetica-Bold',
+            textColor=colors.white
+        )
+        
+        story = []
+        add_pdf_header(story, f"CLASS REPORT SUMMARY - {class_name.upper()}")
+        
+        title_style = ParagraphStyle(
+            'SubSummary',
+            fontName='Helvetica-Bold',
+            fontSize=10,
+            alignment=1,
+            textColor=colors.HexColor("#1e293b"),
+            spaceAfter=12
+        )
+        story.append(Paragraph(f"EXAMINATION SESSION: {exam_name.upper()}", title_style))
+        
+        table_rows = []
+        table_rows.append([Paragraph(f"<b>{h}</b>", th_style) for h in headers])
+        
+        for r in rows:
+            table_rows.append([Paragraph(str(cell), body_style) for cell in r])
+            
+        col_count = len(headers)
+        # Landscape A4 width is 841.89 points. Printable width is ~770 points.
+        col_width = 770.0 / col_count
+        
+        t = Table(table_rows, colWidths=[col_width] * col_count)
+        t.setStyle(TableStyle([
+            ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#2563eb")),
+            ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor("#cbd5e1")),
+            ('ROWBACKGROUNDS', (0,1), (-1,-1), [colors.white, colors.HexColor("#f8fafc")]),
+            ('PADDING', (0,0), (-1,-1), 4),
+            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+        ]))
+        
+        story.append(t)
+        
+        doc.build(story)
+        return True, str(file_path)
+    except Exception as e:
+        return False, str(e)

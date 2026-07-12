@@ -7,7 +7,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt
 from database.connection import get_session
 from database.models import Student, Subject, Class, Examination, Result, SMSLog
-from utils.pdf_generator import generate_report_card, generate_class_report_cards
+from utils.pdf_generator import generate_report_card, generate_class_report_cards, generate_class_summary_pdf
 from config import config
 
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
@@ -778,18 +778,17 @@ class ExamsPanel(QWidget):
                     curr_rank = idx + 1
                 r["rank"] = curr_rank
                 
-            headers = ["Rank", "Student ID", "Student Name"] + subject_names + ["Total Score", "Average"]
+            headers = ["Student ID", "Student Name"] + subject_names + ["Total Score", "Average", "Rank"]
             self.sum_table.setSortingEnabled(False)
             self.sum_table.setColumnCount(len(headers))
             self.sum_table.setHorizontalHeaderLabels(headers)
             self.sum_table.setRowCount(len(student_rows))
             
             for row_idx, r in enumerate(student_rows):
-                self.sum_table.setItem(row_idx, 0, QTableWidgetItem(str(r["rank"])))
-                self.sum_table.setItem(row_idx, 1, QTableWidgetItem(r["id"]))
-                self.sum_table.setItem(row_idx, 2, QTableWidgetItem(r["name"]))
+                self.sum_table.setItem(row_idx, 0, QTableWidgetItem(r["id"]))
+                self.sum_table.setItem(row_idx, 1, QTableWidgetItem(r["name"]))
                 
-                col_offset = 3
+                col_offset = 2
                 for sub_idx, sub_id in enumerate(subject_ids):
                     score = r["scores"][sub_id]
                     score_str = f"{score:.1f}" if score is not None else "-"
@@ -797,10 +796,11 @@ class ExamsPanel(QWidget):
                     
                 self.sum_table.setItem(row_idx, col_offset + len(subject_ids), QTableWidgetItem(f"{r['total']:.1f}"))
                 self.sum_table.setItem(row_idx, col_offset + len(subject_ids) + 1, QTableWidgetItem(f"{r['average']:.1f}"))
+                self.sum_table.setItem(row_idx, col_offset + len(subject_ids) + 2, QTableWidgetItem(str(r["rank"])))
                 
             self.sum_table.setSortingEnabled(True)
             self.sum_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
-            self.sum_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
+            self.sum_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
             
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to compile class summary:\n{e}")
@@ -812,30 +812,63 @@ class ExamsPanel(QWidget):
             QMessageBox.warning(self, "No Data", "Please load a class report summary first.")
             return
             
+        msg_box = QMessageBox(self)
+        msg_box.setWindowTitle("Export Format")
+        msg_box.setText("Choose format to export the Class Report Summary:")
+        excel_btn = msg_box.addButton("Export to Excel", QMessageBox.ButtonRole.ActionRole)
+        pdf_btn = msg_box.addButton("Export to PDF", QMessageBox.ButtonRole.ActionRole)
+        cancel_btn = msg_box.addButton("Cancel", QMessageBox.ButtonRole.RejectRole)
+        
+        msg_box.exec()
+        if msg_box.clickedButton() == cancel_btn:
+            return
+            
         headers = []
         for col in range(self.sum_table.columnCount()):
             headers.append(self.sum_table.horizontalHeaderItem(col).text())
             
         data = []
         for row in range(self.sum_table.rowCount()):
-            row_dict = {}
+            row_data = []
             for col in range(self.sum_table.columnCount()):
                 item = self.sum_table.item(row, col)
-                row_dict[headers[col]] = item.text() if item else ""
-            data.append(row_dict)
+                row_data.append(item.text() if item else "")
+            data.append(row_data)
             
-        file_path, _ = QFileDialog.getSaveFileName(
-            self, "Save Class Report Summary", "class_report_summary.xlsx", "Excel Files (*.xlsx)"
-        )
-        if not file_path:
-            return
+        if msg_box.clickedButton() == excel_btn:
+            # Prepare dictionary data for Excel
+            dict_data = []
+            for row in data:
+                dict_data.append(dict(zip(headers, row)))
+                
+            file_path, _ = QFileDialog.getSaveFileName(
+                self, "Save Class Report Summary", "class_report_summary.xlsx", "Excel Files (*.xlsx)"
+            )
+            if not file_path:
+                return
+                
+            from utils.exporter import export_to_excel
+            success, message = export_to_excel(dict_data, file_path, "Class Summary")
+            if success:
+                QMessageBox.information(self, "Success", message)
+            else:
+                QMessageBox.warning(self, "Failed", message)
+                
+        elif msg_box.clickedButton() == pdf_btn:
+            file_path, _ = QFileDialog.getSaveFileName(
+                self, "Save Class Report Summary", "class_report_summary.pdf", "PDF Files (*.pdf)"
+            )
+            if not file_path:
+                return
+                
+            class_name = self.sum_class_combo.currentText()
+            exam_name = self.sum_exam_combo.currentText()
             
-        from utils.exporter import export_to_excel
-        success, message = export_to_excel(data, file_path, "Class Summary")
-        if success:
-            QMessageBox.information(self, "Success", message)
-        else:
-            QMessageBox.warning(self, "Failed", message)
+            success, filepath = generate_class_summary_pdf(class_name, exam_name, headers, data, file_path)
+            if success:
+                QMessageBox.information(self, "Success", f"Class Report Summary PDF saved at:\n{filepath}")
+            else:
+                QMessageBox.warning(self, "Failed", f"Failed to generate summary PDF:\n{filepath}")
 
 
 class EditReportRemarksDialog(QDialog):
