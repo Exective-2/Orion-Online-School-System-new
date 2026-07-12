@@ -36,3 +36,9 @@ Thumbs.db
 
 # User exports
 exports/
+
+# Installer build output (large binaries)
+installer_output/
+
+# Generated reports
+*_report_summary.pdf
