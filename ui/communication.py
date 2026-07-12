@@ -5,7 +5,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt, Signal
 from database.connection import get_session
-from database.models import Announcement, SMSLog, Parent
+from database.models import Announcement, SMSLog, Parent, Student, Class, Examination, Result, StudentBill
 import datetime
 from config import config
 
@@ -47,7 +47,12 @@ class CommunicationPanel(QWidget):
         self.init_notice_tab()
         self.tabs.addTab(self.notice_tab, "Notice Board")
         
-        # 2. SMS Logs Tab
+        # 2. SMS Broadcaster Tab
+        self.broadcaster_tab = QWidget()
+        self.init_broadcaster_tab()
+        self.tabs.addTab(self.broadcaster_tab, "Parent SMS Broadcaster")
+        
+        # 3. SMS Logs Tab
         self.sms_tab = QWidget()
         self.init_sms_tab()
         self.tabs.addTab(self.sms_tab, "SMS Dispatch Logs")
@@ -260,3 +265,237 @@ class CommunicationPanel(QWidget):
     def refresh(self):
         self.load_board()
         self.load_sms_logs()
+        self.load_broadcaster_combos()
+
+    def init_broadcaster_tab(self):
+        layout = QVBoxLayout(self.broadcaster_tab)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(15)
+        
+        # Filter controls
+        controls = QHBoxLayout()
+        controls.addWidget(QLabel("Select Class Stream:"))
+        self.bc_class_combo = QComboBox()
+        controls.addWidget(self.bc_class_combo)
+        
+        controls.addWidget(QLabel("Broadcast Message Type:"))
+        self.bc_type_combo = QComboBox()
+        self.bc_type_combo.addItems(["Terminal Report Summary", "Outstanding Fee Reminder"])
+        self.bc_type_combo.currentTextChanged.connect(self.on_bc_type_changed)
+        controls.addWidget(self.bc_type_combo)
+        
+        self.bc_exam_label = QLabel("Select Exam:")
+        controls.addWidget(self.bc_exam_label)
+        self.bc_exam_combo = QComboBox()
+        controls.addWidget(self.bc_exam_combo)
+        
+        controls.addStretch()
+        layout.addLayout(controls)
+        
+        # Buttons
+        actions = QHBoxLayout()
+        preview_btn = QPushButton("Generate & Preview Messages")
+        preview_btn.setObjectName("secondary_btn")
+        preview_btn.clicked.connect(self.preview_broadcast)
+        actions.addWidget(preview_btn)
+        
+        self.dispatch_btn = QPushButton("Send Bulk SMS Broadcast")
+        self.dispatch_btn.setObjectName("primary_btn")
+        self.dispatch_btn.setEnabled(False)
+        self.dispatch_btn.clicked.connect(self.send_broadcast)
+        actions.addWidget(self.dispatch_btn)
+        
+        actions.addStretch()
+        layout.addLayout(actions)
+        
+        # Preview Table
+        layout.addWidget(QLabel("<b>Broadcast Messages Queue Preview:</b>"))
+        self.bc_table = QTableWidget()
+        self.bc_table.setColumnCount(4)
+        self.bc_table.setHorizontalHeaderLabels(["Student Name", "Parent Name", "Recipient Phone", "SMS Content Message"])
+        self.bc_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self.bc_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+        self.bc_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
+        self.bc_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
+        layout.addWidget(self.bc_table)
+        
+        self.load_broadcaster_combos()
+        
+    def on_bc_type_changed(self, text):
+        is_report = text == "Terminal Report Summary"
+        self.bc_exam_label.setVisible(is_report)
+        self.bc_exam_combo.setVisible(is_report)
+        
+    def load_broadcaster_combos(self):
+        self.bc_class_combo.clear()
+        self.bc_exam_combo.clear()
+        
+        session = get_session()
+        try:
+            # Classes
+            classes = session.query(Class).all()
+            self.bc_class_combo.addItem("All Classes", None)
+            for c in classes:
+                self.bc_class_combo.addItem(c.name, c.id)
+                
+            # Exams
+            exams = session.query(Examination).all()
+            for e in exams:
+                self.bc_exam_combo.addItem(e.name, e.id)
+        except Exception as e:
+            print(f"Error loading broadcaster combos: {e}")
+        finally:
+            session.close()
+            
+    def preview_broadcast(self):
+        self.bc_table.setRowCount(0)
+        self.dispatch_btn.setEnabled(False)
+        
+        class_id = self.bc_class_combo.currentData()
+        bc_type = self.bc_type_combo.currentText()
+        exam_id = self.bc_exam_combo.currentData()
+        
+        session = get_session()
+        try:
+            # Fetch active students
+            query = session.query(Student).filter(Student.status == "Active")
+            if class_id:
+                query = query.filter(Student.class_id == class_id)
+            students = query.all()
+            
+            if not students:
+                QMessageBox.warning(self, "No Students", "No active students found matching the selection criteria.")
+                return
+                
+            preview_rows = []
+            
+            if bc_type == "Terminal Report Summary":
+                if not exam_id:
+                    QMessageBox.warning(self, "Validation Error", "Please select an examination session.")
+                    return
+                
+                # Group students by class_id to compute ranks accurately!
+                class_students_map = {}
+                for s in students:
+                    if s.class_id not in class_students_map:
+                        class_students_map[s.class_id] = []
+                    class_students_map[s.class_id].append(s)
+                    
+                # Rank mapping for each class
+                ranks_map = {}
+                averages_map = {}
+                subject_counts_map = {}
+                
+                for c_id, s_list in class_students_map.items():
+                    s_ids = [student.id for student in s_list]
+                    all_results = session.query(Result).filter(
+                        Result.examination_id == exam_id,
+                        Result.student_id.in_(s_ids)
+                    ).all()
+                    
+                    totals = {}
+                    counts = {}
+                    for r in all_results:
+                        totals[r.student_id] = totals.get(r.student_id, 0.0) + r.total_score
+                        counts[r.student_id] = counts.get(r.student_id, 0) + 1
+                        
+                    for s_id in s_ids:
+                        totals[s_id] = totals.get(s_id, 0.0)
+                        counts[s_id] = counts.get(s_id, 0)
+                        
+                    sorted_totals = sorted(totals.items(), key=lambda x: x[1], reverse=True)
+                    
+                    curr_rank = 1
+                    for idx, (s_id, tot) in enumerate(sorted_totals):
+                        if idx > 0 and tot < sorted_totals[idx - 1][1]:
+                            curr_rank = idx + 1
+                        ranks_map[s_id] = curr_rank
+                        averages_map[s_id] = (tot / counts[s_id]) if counts.get(s_id, 0) > 0 else 0.0
+                        subject_counts_map[s_id] = counts[s_id]
+                
+                # Build messages
+                for s in students:
+                    if s.parent and s.parent.phone:
+                        pos = ranks_map.get(s.id, 0)
+                        avg = averages_map.get(s.id, 0.0)
+                        sub_cnt = subject_counts_map.get(s.id, 0)
+                        
+                        def get_suffix(rank):
+                            if 11 <= rank % 100 <= 13:
+                                return "th"
+                            return {1: "st", 2: "nd", 3: "rd"}.get(rank % 10, "th")
+                            
+                        pos_str = f"{pos}{get_suffix(pos)}" if pos > 0 else "N/A"
+                        
+                        msg = f"Orion SMS: Dear Parent/Guardian, report summary for {s.first_name} {s.last_name}: Average Score: {avg:.1f}%, Position in Class: {pos_str} (out of {len(class_students_map.get(s.class_id, []))}). Total subjects graded: {sub_cnt}."
+                        preview_rows.append((s, s.parent.name or "Parent", s.parent.phone, msg))
+                        
+            elif bc_type == "Outstanding Fee Reminder":
+                for s in students:
+                    if s.parent and s.parent.phone:
+                        bills = session.query(StudentBill).filter(StudentBill.student_id == s.id).all()
+                        total_billed = sum(b.amount_billed for b in bills)
+                        total_paid = sum(b.amount_paid for b in bills)
+                        balance = total_billed - total_paid
+                        
+                        if balance > 0:
+                            msg = f"Orion SMS: Dear Parent/Guardian, this is a friendly reminder that {s.first_name} {s.last_name} has an outstanding fees balance of GHS {balance:.2f}. Please make payment as soon as possible. Thank you."
+                            preview_rows.append((s, s.parent.name or "Parent", s.parent.phone, msg))
+                            
+            if not preview_rows:
+                QMessageBox.information(self, "No Records", "No messages generated. Ensure students have parent contacts and outstanding balances / grading results entered.")
+                return
+                
+            self.bc_table.setRowCount(len(preview_rows))
+            self.bc_queue_data = []
+            
+            for i, (student, parent_name, phone, msg) in enumerate(preview_rows):
+                self.bc_table.setItem(i, 0, QTableWidgetItem(f"{student.first_name} {student.last_name}"))
+                self.bc_table.setItem(i, 1, QTableWidgetItem(parent_name))
+                self.bc_table.setItem(i, 2, QTableWidgetItem(phone))
+                self.bc_table.setItem(i, 3, QTableWidgetItem(msg))
+                self.bc_queue_data.append((phone, msg))
+                
+            self.dispatch_btn.setEnabled(True)
+            QMessageBox.information(self, "Preview Ready", f"Generated {len(preview_rows)} message(s) successfully. Please review the table below and click 'Send Bulk SMS Broadcast' to dispatch.")
+            
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to preview broadcast: {e}")
+        finally:
+            session.close()
+            
+    def send_broadcast(self):
+        if not hasattr(self, 'bc_queue_data') or not self.bc_queue_data:
+            return
+            
+        confirm = QMessageBox.question(
+            self, "Confirm Broadcast",
+            f"Are you sure you want to send all {len(self.bc_queue_data)} SMS alerts now?",
+            QMessageBox.Yes | QMessageBox.No
+        )
+        if confirm != QMessageBox.Yes:
+            return
+            
+        session = get_session()
+        sent_count = 0
+        try:
+            for phone, msg in self.bc_queue_data:
+                log = SMSLog(
+                    recipient_phone=phone,
+                    message_content=msg,
+                    status="Sent",
+                    trigger_type="Broadcast"
+                )
+                session.add(log)
+                sent_count += 1
+                
+            session.commit()
+            QMessageBox.information(self, "Broadcast Sent", f"Successfully dispatched {sent_count} SMS notifications to parents.")
+            self.bc_table.setRowCount(0)
+            self.dispatch_btn.setEnabled(False)
+            self.load_sms_logs()
+        except Exception as e:
+            session.rollback()
+            QMessageBox.critical(self, "Error", f"Failed to send broadcast: {e}")
+        finally:
+            session.close()
