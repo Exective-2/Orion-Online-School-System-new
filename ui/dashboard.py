@@ -4,7 +4,7 @@ from PySide6.QtWidgets import (
     QScrollArea
 )
 from PySide6.QtCore import Qt
-from PySide6.QtCharts import QChart, QChartView, QBarSet, QBarSeries, QBarCategoryAxis, QValueAxis
+from PySide6.QtCharts import QChart, QChartView, QBarSet, QBarSeries, QBarCategoryAxis, QValueAxis, QPieSeries, QPieSlice
 from PySide6.QtGui import QPainter, QColor
 from database.connection import get_session
 from database.models import Student, Staff, Class, Attendance, StudentBill, Announcement
@@ -56,6 +56,23 @@ class DashboardPanel(QWidget):
         chart_layout.addWidget(self.chart_view)
         
         split_layout.addWidget(self.chart_frame, stretch=3)
+        
+        # Enrollment / Attendance chart card
+        self.enrollment_chart_frame = QFrame()
+        self.enrollment_chart_frame.setObjectName("card")
+        enrollment_chart_layout = QVBoxLayout(self.enrollment_chart_frame)
+        enrollment_chart_layout.setContentsMargins(15, 15, 15, 15)
+        
+        self.enrollment_chart_title = QLabel("Student Distribution")
+        self.enrollment_chart_title.setStyleSheet("font-size: 15px; font-weight: bold; color: #10b981;")
+        enrollment_chart_layout.addWidget(self.enrollment_chart_title)
+        
+        self.enrollment_chart_view = QChartView()
+        self.enrollment_chart_view.setRenderHint(QPainter.RenderHint.Antialiasing)
+        self.enrollment_chart_view.setMinimumHeight(300)
+        enrollment_chart_layout.addWidget(self.enrollment_chart_view)
+        
+        split_layout.addWidget(self.enrollment_chart_frame, stretch=3)
         
         # Announcements and news list
         ann_frame = QFrame()
@@ -251,6 +268,53 @@ class DashboardPanel(QWidget):
                 
                 self.chart_view.setChart(chart)
                 
+                # Render Teacher attendance overview pie chart
+                self.enrollment_chart_title.setText("Class Attendance Overview")
+                attendance_stats = {"Present": 0, "Absent": 0, "Late": 0}
+                if ct_record and ct_record.class_obj:
+                    class_student_ids = [s.id for s in session.query(Student).filter(Student.class_id == ct_record.class_id).all()]
+                    if class_student_ids:
+                        att_records = session.query(Attendance).filter(
+                            Attendance.student_id.in_(class_student_ids)
+                        ).all()
+                        for att in att_records:
+                            if att.status in attendance_stats:
+                                attendance_stats[att.status] += 1
+                                
+                pie_series = QPieSeries()
+                has_att_data = False
+                for status, count in attendance_stats.items():
+                    if count > 0:
+                        has_att_data = True
+                    pie_series.append(f"{status} ({count})", count)
+                if not has_att_data:
+                    pie_series.append("No Attendance Logged", 1)
+                    
+                pie_chart = QChart()
+                pie_chart.addSeries(pie_series)
+                pie_chart.setTitle("Overall Attendance Distribution")
+                pie_chart.setAnimationOptions(QChart.AnimationOption.SeriesAnimations)
+                
+                # Theme styling
+                bg_color = "#1e293b"
+                if active_theme == "emerald":
+                    bg_color = "#0d291e"
+                elif active_theme == "sapphire":
+                    bg_color = "#111a2e"
+                elif active_theme == "amber":
+                    bg_color = "#2c1e10"
+                    
+                if active_theme == "light":
+                    pie_chart.setBackgroundBrush(QColor("#ffffff"))
+                    pie_chart.setTitleBrush(QColor("#0f172a"))
+                    pie_chart.legend().setLabelColor(QColor("#334155"))
+                else:
+                    pie_chart.setBackgroundBrush(QColor(bg_color))
+                    pie_chart.setTitleBrush(QColor("#f8fafc"))
+                    pie_chart.legend().setLabelColor(QColor("#f8fafc"))
+                    
+                self.enrollment_chart_view.setChart(pie_chart)
+                
             else:
                 self.chart_title.setText("Term fee Collection Analytics (GHS)")
                 
@@ -342,6 +406,46 @@ class DashboardPanel(QWidget):
                 series.attachAxis(axis_y)
                 
                 self.chart_view.setChart(chart)
+                
+                # Render Admin student distribution pie chart
+                self.enrollment_chart_title.setText("Student Class Distribution")
+                classes = session.query(Class).all()
+                class_students = {}
+                for c in classes:
+                    cnt = session.query(Student).filter(Student.class_id == c.id, Student.status == "Active").count()
+                    if cnt > 0:
+                        class_students[c.name] = cnt
+                        
+                pie_series = QPieSeries()
+                if class_students:
+                    for c_name, count in class_students.items():
+                        pie_series.append(f"{c_name} ({count})", count)
+                else:
+                    pie_series.append("No Active Students", 1)
+                    
+                pie_chart = QChart()
+                pie_chart.addSeries(pie_series)
+                pie_chart.setTitle("Active Students by Class Stream")
+                pie_chart.setAnimationOptions(QChart.AnimationOption.SeriesAnimations)
+                
+                bg_color = "#1e293b"
+                if active_theme == "emerald":
+                    bg_color = "#0d291e"
+                elif active_theme == "sapphire":
+                    bg_color = "#111a2e"
+                elif active_theme == "amber":
+                    bg_color = "#2c1e10"
+                    
+                if active_theme == "light":
+                    pie_chart.setBackgroundBrush(QColor("#ffffff"))
+                    pie_chart.setTitleBrush(QColor("#0f172a"))
+                    pie_chart.legend().setLabelColor(QColor("#334155"))
+                else:
+                    pie_chart.setBackgroundBrush(QColor(bg_color))
+                    pie_chart.setTitleBrush(QColor("#f8fafc"))
+                    pie_chart.legend().setLabelColor(QColor("#f8fafc"))
+                    
+                self.enrollment_chart_view.setChart(pie_chart)
                 
         except Exception as e:
             print(f"Error refreshing dashboard: {e}")
