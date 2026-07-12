@@ -2,7 +2,7 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QFrame, QLabel, 
     QLineEdit, QComboBox, QPushButton, QTableWidget, QTableWidgetItem,
     QHeaderView, QDialog, QFormLayout, QDialogButtonBox, QMessageBox,
-    QDateEdit, QTabWidget, QCheckBox
+    QDateEdit, QTabWidget, QCheckBox, QFileDialog
 )
 from PySide6.QtCore import Qt, QDate, Signal
 from database.connection import get_session
@@ -309,7 +309,13 @@ class StaffPanel(QWidget):
             payslip = session.query(Payslip).filter(Payslip.id == payslip_id).first()
             if payslip:
                 from utils.pdf_generator import generate_payslip_pdf
-                pdf_path, error = generate_payslip_pdf(payslip)
+                default_filename = f"payslip_{payslip.staff_id}_{payslip.pay_period.replace(' ', '_')}.pdf"
+                file_path, _ = QFileDialog.getSaveFileName(
+                    self, "Save Payslip", default_filename, "PDF Files (*.pdf)"
+                )
+                if not file_path:
+                    return
+                pdf_path, error = generate_payslip_pdf(payslip, file_path)
                 if pdf_path:
                     import os, subprocess
                     if os.path.exists(pdf_path):

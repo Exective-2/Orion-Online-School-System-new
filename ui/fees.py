@@ -2,7 +2,7 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QFrame, QLabel, 
     QLineEdit, QComboBox, QPushButton, QTableWidget, QTableWidgetItem,
     QHeaderView, QMessageBox, QDialog, QFormLayout, QDialogButtonBox,
-    QTabWidget
+    QTabWidget, QFileDialog
 )
 from PySide6.QtCore import Qt, QDate, Signal
 from PySide6.QtGui import QColor
@@ -165,7 +165,13 @@ class FeesPanel(QWidget):
                 QMessageBox.warning(self, "No Payments", "No payments have been recorded for this bill yet.")
                 return
                 
-            success, filepath = generate_fee_receipt(pmt.id)
+            file_path, _ = QFileDialog.getSaveFileName(
+                self, "Save Fee Receipt", f"fee_receipt_pmt_{pmt.id}.pdf", "PDF Files (*.pdf)"
+            )
+            if not file_path:
+                return
+                
+            success, filepath = generate_fee_receipt(pmt.id, file_path)
             if success:
                 QMessageBox.information(self, "Success", f"Fee Receipt PDF generated at:\n{filepath}")
             else:
@@ -279,7 +285,13 @@ class FeesPanel(QWidget):
                 "outstanding_balance_ghs": float(self.ledger_table.item(row, 5).text()),
             })
             
-        success, message = export_to_excel(data, str(DATA_DIR / "exports" / "fee_balances.xlsx"), "Defaulters Ledger")
+        file_path, _ = QFileDialog.getSaveFileName(
+            self, "Save Defaulters Ledger", "fee_balances.xlsx", "Excel Files (*.xlsx)"
+        )
+        if not file_path:
+            return
+            
+        success, message = export_to_excel(data, file_path, "Defaulters Ledger")
         if success:
             QMessageBox.information(self, "Export Complete", message)
         else:
@@ -434,7 +446,13 @@ class FeesPanel(QWidget):
         dialog.exec()
         
     def print_financial_statement(self):
-        success, filepath = generate_financial_statement()
+        file_path, _ = QFileDialog.getSaveFileName(
+            self, "Save Financial Income Statement", "financial_income_statement.pdf", "PDF Files (*.pdf)"
+        )
+        if not file_path:
+            return
+            
+        success, filepath = generate_financial_statement(file_path)
         if success:
             QMessageBox.information(self, "Success", f"Financial Income Statement PDF generated at:\n{filepath}")
         else:
@@ -559,10 +577,14 @@ class RecordPaymentDialog(QDialog):
                 session.commit()
                 
                 # Generate receipt PDF instantly
-                success, filepath = generate_fee_receipt(payment.id)
+                file_path, _ = QFileDialog.getSaveFileName(
+                    self, "Save Fee Receipt", f"fee_receipt_pmt_{payment.id}.pdf", "PDF Files (*.pdf)"
+                )
                 msg = f"Payment of GHS {amount_to_pay:.2f} recorded successfully."
-                if success:
-                    msg += f"\nReceipt generated at:\n{filepath}"
+                if file_path:
+                    success, filepath = generate_fee_receipt(payment.id, file_path)
+                    if success:
+                        msg += f"\nReceipt generated at:\n{filepath}"
                 QMessageBox.information(self, "Success", msg)
                 
                 self.payment_saved.emit()

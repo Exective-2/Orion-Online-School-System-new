@@ -1,7 +1,7 @@
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QFrame, QLabel, 
     QComboBox, QPushButton, QTableWidget, QTableWidgetItem,
-    QHeaderView, QMessageBox, QDialog, QTabWidget
+    QHeaderView, QMessageBox, QDialog, QTabWidget, QFileDialog
 )
 from PySide6.QtCore import Qt
 from database.connection import get_session
@@ -561,7 +561,13 @@ class ExamsPanel(QWidget):
         student_id = self.table.item(selected_row, 0).text()
         exam_id = self.exam_combo.currentData()
         
-        success, filepath = generate_report_card(student_id, exam_id)
+        file_path, _ = QFileDialog.getSaveFileName(
+            self, "Save Report Card", f"report_card_{student_id}_exam_{exam_id}.pdf", "PDF Files (*.pdf)"
+        )
+        if not file_path:
+            return
+            
+        success, filepath = generate_report_card(student_id, exam_id, file_path)
         if success:
             QMessageBox.information(self, "Success", f"Terminal Report Card PDF generated at:\n{filepath}")
         else:

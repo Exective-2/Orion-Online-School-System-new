@@ -118,7 +118,7 @@ def add_pdf_header(story, title_text=None):
         )
         story.append(Paragraph(title_text.upper(), title_style))
 
-def generate_student_id_card(student_id: str) -> tuple[bool, str]:
+def generate_student_id_card(student_id: str, output_path: str = None) -> tuple[bool, str]:
     """
     Generates a CR80 standard sized student ID Card PDF.
     """
@@ -128,7 +128,7 @@ def generate_student_id_card(student_id: str) -> tuple[bool, str]:
         if not student:
             return False, "Student not found."
             
-        file_path = _get_pdf_dir() / f"id_card_{student_id}.pdf"
+        file_path = Path(output_path) if output_path else _get_pdf_dir() / f"id_card_{student_id}.pdf"
         
         # ID Card size: CR80 is 85.6mm x 54mm (approx 3.37 x 2.125 inches)
         # We will make the page size slightly larger or exactly CR80
@@ -199,7 +199,7 @@ def generate_student_id_card(student_id: str) -> tuple[bool, str]:
     except Exception as e:
         return False, str(e)
 
-def generate_admission_form(student_id: str) -> tuple[bool, str]:
+def generate_admission_form(student_id: str, output_path: str = None) -> tuple[bool, str]:
     """
     Generates a full A4 sized student admission slip document.
     """
@@ -209,7 +209,7 @@ def generate_admission_form(student_id: str) -> tuple[bool, str]:
         if not student:
             return False, "Student not found."
             
-        file_path = _get_pdf_dir() / f"admission_slip_{student_id}.pdf"
+        file_path = Path(output_path) if output_path else _get_pdf_dir() / f"admission_slip_{student_id}.pdf"
         
         doc = SimpleDocTemplate(
             str(file_path),
@@ -324,7 +324,7 @@ def generate_admission_form(student_id: str) -> tuple[bool, str]:
     except Exception as e:
         return False, str(e)
 
-def generate_fee_receipt(payment_id: int) -> tuple[bool, str]:
+def generate_fee_receipt(payment_id: int, output_path: str = None) -> tuple[bool, str]:
     """
     Generates a Receipt PDF for a recorded fee payment.
     """
@@ -334,7 +334,7 @@ def generate_fee_receipt(payment_id: int) -> tuple[bool, str]:
         if not payment:
             return False, "Payment transaction record not found."
             
-        file_path = _get_pdf_dir() / f"fee_receipt_pmt_{payment_id}.pdf"
+        file_path = Path(output_path) if output_path else _get_pdf_dir() / f"fee_receipt_pmt_{payment_id}.pdf"
         
         doc = SimpleDocTemplate(
             str(file_path),
@@ -399,7 +399,7 @@ def generate_fee_receipt(payment_id: int) -> tuple[bool, str]:
     except Exception as e:
         return False, str(e)
 
-def generate_report_card(student_id: str, examination_id: int) -> tuple[bool, str]:
+def generate_report_card(student_id: str, examination_id: int, output_path: str = None) -> tuple[bool, str]:
     """
     Compiles terminal grades & assessment averages for a student.
     """
@@ -411,7 +411,7 @@ def generate_report_card(student_id: str, examination_id: int) -> tuple[bool, st
         if not student or not exam:
             return False, "Student or Examination session not found."
             
-        file_path = _get_pdf_dir() / f"report_card_{student_id}_exam_{examination_id}.pdf"
+        file_path = Path(output_path) if output_path else _get_pdf_dir() / f"report_card_{student_id}_exam_{examination_id}.pdf"
         
         doc = SimpleDocTemplate(
             str(file_path),
@@ -549,7 +549,7 @@ def generate_report_card(student_id: str, examination_id: int) -> tuple[bool, st
     except Exception as e:
         return False, str(e)
 
-def generate_financial_statement() -> tuple[bool, str]:
+def generate_financial_statement(output_path: str = None) -> tuple[bool, str]:
     """
     Compiles all system payments and operational expenses into a Financial PDF Ledger sheet.
     """
@@ -558,7 +558,7 @@ def generate_financial_statement() -> tuple[bool, str]:
         payments = session.query(Payment).all()
         expenses = session.query(Expense).all()
         
-        file_path = _get_pdf_dir() / "financial_income_statement.pdf"
+        file_path = Path(output_path) if output_path else _get_pdf_dir() / "financial_income_statement.pdf"
         
         doc = SimpleDocTemplate(
             str(file_path),
@@ -688,9 +688,9 @@ def generate_financial_statement() -> tuple[bool, str]:
     except Exception as e:
         return False, str(e)
 
-def generate_payslip_pdf(payslip):
+def generate_payslip_pdf(payslip, output_path: str = None):
     try:
-        file_path = _get_pdf_dir() / f"payslip_{payslip.staff_id}_{payslip.pay_period.replace(' ', '_')}.pdf"
+        file_path = Path(output_path) if output_path else _get_pdf_dir() / f"payslip_{payslip.staff_id}_{payslip.pay_period.replace(' ', '_')}.pdf"
         
         doc = SimpleDocTemplate(
             str(file_path),

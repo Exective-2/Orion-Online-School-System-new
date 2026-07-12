@@ -2,7 +2,7 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QFrame, QLabel, 
     QLineEdit, QComboBox, QPushButton, QTableWidget, QTableWidgetItem,
     QHeaderView, QDialog, QFormLayout, QDialogButtonBox, QMessageBox,
-    QDateEdit, QTextEdit, QTabWidget, QCheckBox
+    QDateEdit, QTextEdit, QTabWidget, QCheckBox, QFileDialog
 )
 from PySide6.QtCore import Qt, QDate, Signal
 from database.connection import get_session
@@ -371,7 +371,12 @@ class StudentsPanel(QWidget):
         dialog.exec()
         
     def print_student_id(self, student_id):
-        success, filepath = generate_student_id_card(student_id)
+        file_path, _ = QFileDialog.getSaveFileName(
+            self, "Save Student ID Card", f"id_card_{student_id}.pdf", "PDF Files (*.pdf)"
+        )
+        if not file_path:
+            return
+        success, filepath = generate_student_id_card(student_id, file_path)
         if success:
             QMessageBox.information(self, "Success", f"ID Card PDF generated at:\n{filepath}")
         else:
@@ -523,7 +528,12 @@ class StudentProfileDialog(QDialog):
             session.close()
             
     def generate_admission_pdf(self):
-        success, filepath = generate_admission_form(self.student_id)
+        file_path, _ = QFileDialog.getSaveFileName(
+            self, "Save Admission Slip", f"admission_slip_{self.student_id}.pdf", "PDF Files (*.pdf)"
+        )
+        if not file_path:
+            return
+        success, filepath = generate_admission_form(self.student_id, file_path)
         if success:
             QMessageBox.information(self, "Success", f"Admission Slip PDF generated at:\n{filepath}")
         else:
