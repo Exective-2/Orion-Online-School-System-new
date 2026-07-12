@@ -447,11 +447,56 @@ def generate_report_card(student_id: str, examination_id: int, output_path: str 
         story = []
         add_pdf_header(story, f"STUDENT TERMINAL REPORT CARD - {exam.name}")
         
+        # Compute student position & stats
+        all_class_students = session.query(Student).filter(
+            Student.class_id == student.class_id,
+            Student.status == "Active"
+        ).all()
+        
+        class_student_ids = [s.id for s in all_class_students]
+        all_results = session.query(Result).filter(
+            Result.examination_id == examination_id,
+            Result.student_id.in_(class_student_ids)
+        ).all()
+        
+        totals = {}
+        subject_counts = {}
+        for r in all_results:
+            totals[r.student_id] = totals.get(r.student_id, 0.0) + r.total_score
+            subject_counts[r.student_id] = subject_counts.get(r.student_id, 0) + 1
+            
+        for s_id in class_student_ids:
+            if s_id not in totals:
+                totals[s_id] = 0.0
+                subject_counts[s_id] = 0
+                
+        sorted_totals = sorted(totals.items(), key=lambda x: x[1], reverse=True)
+        
+        ranks = {}
+        curr_rank = 1
+        for idx, (s_id, tot) in enumerate(sorted_totals):
+            if idx > 0 and tot < sorted_totals[idx - 1][1]:
+                curr_rank = idx + 1
+            ranks[s_id] = curr_rank
+            
+        def get_rank_suffix(rank):
+            if 11 <= rank % 100 <= 13:
+                suffix = "th"
+            else:
+                suffix = {1: "st", 2: "nd", 3: "rd"}.get(rank % 10, "th")
+            return f"{rank}{suffix}"
+            
+        pos = ranks.get(student_id, 0)
+        pos_text = f"{get_rank_suffix(pos)} out of {len(class_student_ids)}" if pos > 0 else "N/A"
+        
+        student_avg = (totals.get(student_id, 0.0) / subject_counts.get(student_id, 1)) if subject_counts.get(student_id, 0) > 0 else 0.0
+        
         # Student Meta Grid
         cls_name = student.class_assigned.name if student.class_assigned else "Unassigned"
         meta_data = [
             [Paragraph(f"<b>Student ID:</b> {student.id}", body_style), Paragraph(f"<b>Student Name:</b> {student.first_name} {student.last_name}", body_style)],
-            [Paragraph(f"<b>Class Stream:</b> {cls_name}", body_style), Paragraph(f"<b>Academic Session:</b> {exam.academic_year.name} - {exam.term.name}", body_style)]
+            [Paragraph(f"<b>Class Stream:</b> {cls_name}", body_style), Paragraph(f"<b>Academic Session:</b> {exam.academic_year.name} - {exam.term.name}", body_style)],
+            [Paragraph(f"<b>Class Position:</b> {pos_text}", body_style), Paragraph(f"<b>Average Score:</b> {student_avg:.1f}%", body_style)]
         ]
         t_meta = Table(meta_data, colWidths=[3.5*inch, 3.5*inch])
         t_meta.setStyle(TableStyle([

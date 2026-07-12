@@ -745,8 +745,11 @@ class ExamsPanel(QWidget):
                 student_rows.append(row_data)
                 
             student_rows.sort(key=lambda x: x["total"], reverse=True)
+            curr_rank = 1
             for idx, r in enumerate(student_rows):
-                r["rank"] = idx + 1
+                if idx > 0 and r["total"] < student_rows[idx - 1]["total"]:
+                    curr_rank = idx + 1
+                r["rank"] = curr_rank
                 
             headers = ["Rank", "Student ID", "Student Name"] + subject_names + ["Total Score", "Average"]
             self.sum_table.setSortingEnabled(False)
