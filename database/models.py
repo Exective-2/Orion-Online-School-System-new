@@ -147,8 +147,8 @@ class Staff(Base):
     
     user = relationship("User", back_populates="staff_profile")
     attendance = relationship("Attendance", back_populates="staff", cascade="all, delete-orphan")
-    class_teachers = relationship("ClassTeacher", back_populates="staff")
-    subject_assignments = relationship("TeacherSubject", back_populates="staff")
+    class_teachers = relationship("ClassTeacher", back_populates="staff", cascade="all, delete-orphan")
+    subject_assignments = relationship("TeacherSubject", back_populates="staff", cascade="all, delete-orphan")
     payslips = relationship("Payslip", back_populates="staff", cascade="all, delete-orphan")
 
 class Subject(Base):

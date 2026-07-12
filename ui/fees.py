@@ -10,7 +10,7 @@ from database.connection import get_session
 from database.models import Student, Fee, StudentBill, Payment, Class, Expense, SMSLog
 from utils.pdf_generator import generate_fee_receipt, generate_financial_statement
 from utils.exporter import export_to_excel
-from config import DATA_DIR
+from config import DATA_DIR, config
 import datetime
 
 class FeesPanel(QWidget):
@@ -235,6 +235,18 @@ class FeesPanel(QWidget):
         export_btn.setObjectName("secondary_btn")
         export_btn.clicked.connect(self.export_balances)
         actions.addWidget(export_btn)
+        
+        # Role check for pushing debts
+        is_allowed = False
+        if self.user and self.user.role:
+            is_allowed = self.user.role.name in ["Super Admin", "Admin/Headteacher", "Accountant", "Bursar"]
+            
+        if is_allowed:
+            push_debts_btn = QPushButton("Push Debts to Next Term")
+            push_debts_btn.setObjectName("primary_btn")
+            push_debts_btn.clicked.connect(self.open_push_debts_dialog)
+            actions.addWidget(push_debts_btn)
+            
         actions.addStretch()
         tab_layout.addLayout(actions)
         
@@ -296,6 +308,11 @@ class FeesPanel(QWidget):
             QMessageBox.information(self, "Export Complete", message)
         else:
             QMessageBox.warning(self, "Export Failed", message)
+            
+    def open_push_debts_dialog(self):
+        dialog = PushDebtsDialog(self.user, self)
+        dialog.debts_pushed.connect(self.load_ledger)
+        dialog.exec()
             
     # --- Income & Expense Ledger ---
     def init_ledger_tab(self):
@@ -741,5 +758,175 @@ class LogExpenseDialog(QDialog):
             self.accept()
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to log expense: {e}")
+        finally:
+            session.close()
+
+
+class PushDebtsDialog(QDialog):
+    debts_pushed = Signal()
+    
+    def __init__(self, user, parent_widget=None):
+        super().__init__(parent_widget)
+        self.user = user
+        self.setWindowTitle("Push Debts to Next Term")
+        self.setMinimumWidth(450)
+        self.init_ui()
+        self.load_terms_and_debts()
+        
+    def init_ui(self):
+        layout = QVBoxLayout(self)
+        
+        info_lbl = QLabel(
+            "Carry forward all outstanding balances from the current active term to a target term as Arrears."
+        )
+        info_lbl.setWordWrap(True)
+        layout.addWidget(info_lbl)
+        
+        form_frame = QFrame()
+        form_frame.setObjectName("card")
+        form_layout = QFormLayout(form_frame)
+        form_layout.setSpacing(12)
+        
+        self.current_term_lbl = QLabel("Loading...")
+        self.debt_summary_lbl = QLabel("Loading...")
+        self.target_term_combo = QComboBox()
+        
+        form_layout.addRow("Current Active Term:", self.current_term_lbl)
+        form_layout.addRow("Outstanding Debts Summary:", self.debt_summary_lbl)
+        form_layout.addRow("Select Target Term *:", self.target_term_combo)
+        
+        layout.addWidget(form_frame)
+        
+        # Bottom confirmation buttons
+        btn_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        btn_box.accepted.connect(self.confirm_push_debts)
+        btn_box.rejected.connect(self.reject)
+        layout.addWidget(btn_box)
+        
+    def load_terms_and_debts(self):
+        session = get_session()
+        try:
+            from database.models import Term
+            current_term_id = config.get("active_term_id", 1)
+            current_term = session.query(Term).filter(Term.id == current_term_id).first()
+            if current_term:
+                self.current_term_lbl.setText(f"{current_term.academic_year.name} - {current_term.name}")
+            else:
+                self.current_term_lbl.setText("Unknown Active Term")
+                
+            # Count outstanding debts in current term
+            unpaid_bills = session.query(StudentBill).join(Fee).filter(
+                Fee.term_id == current_term_id,
+                StudentBill.amount_billed > StudentBill.amount_paid
+            ).all()
+            
+            total_debt = sum((bill.amount_billed - bill.amount_paid) for bill in unpaid_bills)
+            student_ids = {bill.student_id for bill in unpaid_bills}
+            self.debt_summary_lbl.setText(f"{total_debt:.2f} GHS outstanding across {len(student_ids)} students.")
+            
+            # Load potential target terms
+            terms = session.query(Term).all()
+            self.target_term_combo.clear()
+            for term in terms:
+                term_str = f"{term.academic_year.name} - {term.name}"
+                if term.id == current_term_id:
+                    term_str += " (Current Active)"
+                self.target_term_combo.addItem(term_str, term.id)
+                
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to load terms/debts: {e}")
+        finally:
+            session.close()
+            
+    def confirm_push_debts(self):
+        target_term_id = self.target_term_combo.currentData()
+        current_term_id = config.get("active_term_id", 1)
+        
+        if target_term_id == current_term_id:
+            QMessageBox.warning(self, "Invalid Selection", "Cannot push debts to the current active term itself. Please select a different target term.")
+            return
+            
+        confirm = QMessageBox.question(
+            self, "Confirm Carry Forward",
+            "Are you sure you want to push all outstanding debts from the current term to the selected term?\n\n"
+            "This will reduce outstanding balances in the current term to zero (marked as 'Carried Forward') "
+            "and create matching 'Previous Term Arrears' bills in the target term.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
+        if confirm == QMessageBox.StandardButton.No:
+            return
+            
+        session = get_session()
+        try:
+            from database.models import Term, AuditLog
+            target_term = session.query(Term).filter(Term.id == target_term_id).first()
+            if not target_term:
+                QMessageBox.warning(self, "Error", "Target term not found.")
+                return
+                
+            # Find unpaid bills
+            unpaid_bills = session.query(StudentBill).join(Fee).filter(
+                Fee.term_id == current_term_id,
+                StudentBill.amount_billed > StudentBill.amount_paid
+            ).all()
+            
+            if not unpaid_bills:
+                QMessageBox.information(self, "No Debts", "No outstanding debts found to push.")
+                self.accept()
+                return
+                
+            # Find or create Arrears Fee in target term
+            arrears_fee = session.query(Fee).filter(
+                Fee.term_id == target_term_id,
+                Fee.name == "Previous Term Arrears"
+            ).first()
+            
+            if not arrears_fee:
+                arrears_fee = Fee(
+                    name="Previous Term Arrears",
+                    amount=0.0,
+                    class_level="All",
+                    academic_year_id=target_term.academic_year_id,
+                    term_id=target_term_id
+                )
+                session.add(arrears_fee)
+                session.flush()
+                
+            pushed_count = 0
+            for bill in unpaid_bills:
+                outstanding = bill.amount_billed - bill.amount_paid
+                
+                # Create arrears bill
+                new_bill = StudentBill(
+                    student_id=bill.student_id,
+                    fee_id=arrears_fee.id,
+                    amount_billed=outstanding,
+                    amount_paid=0.0,
+                    status="Unpaid"
+                )
+                session.add(new_bill)
+                
+                # Update old bill
+                bill.amount_billed = bill.amount_paid
+                bill.status = "Carried Forward"
+                pushed_count += 1
+                
+            # Log audit trail
+            audit = AuditLog(
+                user_id=self.user.id,
+                action="Push Debts",
+                table_name="StudentBill",
+                details=f"Carried forward outstanding arrears for {pushed_count} students from term ID {current_term_id} to term ID {target_term_id}."
+            )
+            session.add(audit)
+            
+            session.commit()
+            QMessageBox.information(self, "Success", f"Successfully pushed debts for {pushed_count} students to the selected term.")
+            self.debts_pushed.emit()
+            self.accept()
+            
+        except Exception as e:
+            session.rollback()
+            QMessageBox.critical(self, "Error", f"Failed to push debts: {e}")
         finally:
             session.close()

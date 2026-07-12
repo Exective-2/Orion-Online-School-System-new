@@ -5,7 +5,8 @@ from pathlib import Path
 from PySide6.QtWidgets import (
     QDialog, QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
     QLineEdit, QComboBox, QPushButton, QStackedWidget, 
-    QFileDialog, QMessageBox, QFormLayout, QFrame, QApplication
+    QFileDialog, QMessageBox, QFormLayout, QFrame, QApplication,
+    QCheckBox
 )
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QPixmap, QIcon
@@ -189,6 +190,11 @@ class SetupWizardDialog(QDialog):
         form_layout.addRow("Password *:", self.admin_pass_input)
         form_layout.addRow("Confirm Password *:", self.admin_confirm_input)
         
+        self.seed_demo_cb = QCheckBox("Seed database with sample demo data (teachers, students, library, inventory)")
+        self.seed_demo_cb.setChecked(False)
+        self.seed_demo_cb.setStyleSheet("margin-top: 10px;")
+        form_layout.addRow("", self.seed_demo_cb)
+        
         layout.addWidget(form_frame)
         layout.addStretch()
         return widget
@@ -332,7 +338,8 @@ class SetupWizardDialog(QDialog):
             
             # 3. Create tables & Seed Default Data
             init_db()
-            seed_database()
+            seed_demo = self.seed_demo_cb.isChecked()
+            seed_database(seed_demo=seed_demo)
             
             # 4. Modify Seeded Admin Credentials to custom input
             session = get_session()

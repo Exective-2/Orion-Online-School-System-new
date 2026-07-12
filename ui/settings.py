@@ -700,6 +700,7 @@ class SettingsPanel(QWidget):
         self.chk_finance = QCheckBox("Financial Records & Finance Data (Bills, Fees, Payments, Expenses, Payslips)")
         self.chk_attendance = QCheckBox("Attendance Logs (Student and Staff daily presence/absence records)")
         self.chk_library = QCheckBox("Library Records (Book catalog, checkout history, overdue issues, and fines)")
+        self.chk_inventory = QCheckBox("Inventory & Stock Records (Items catalog, stock movement registers)")
         self.chk_staff = QCheckBox("Staff Directory & Accounts (All employee profiles & user login accounts, excluding current Admin)")
         
         sel_layout.addWidget(self.chk_academics)
@@ -707,6 +708,7 @@ class SettingsPanel(QWidget):
         sel_layout.addWidget(self.chk_finance)
         sel_layout.addWidget(self.chk_attendance)
         sel_layout.addWidget(self.chk_library)
+        sel_layout.addWidget(self.chk_inventory)
         sel_layout.addWidget(self.chk_staff)
         
         opts_layout.addWidget(self.sel_container)
@@ -769,15 +771,18 @@ class SettingsPanel(QWidget):
 
     def run_full_system_reset(self):
         try:
-            from database.connection import get_engine
+            from database.connection import get_engine, reset_engine
             from database.models import Base
             from PySide6.QtWidgets import QApplication
             engine = get_engine()
             
-            engine.dispose()
-            
+            # Drop and recreate all tables on the current engine
             Base.metadata.drop_all(bind=engine)
             Base.metadata.create_all(bind=engine)
+            
+            # Fully clear the engine/session singletons so the setup wizard
+            # gets clean, lock-free connections when it re-seeds the database
+            reset_engine()
             
             from config import config, save_config
             config["setup_completed"] = False
@@ -805,7 +810,7 @@ class SettingsPanel(QWidget):
             from database.models import (
                 Attendance, Result, Examination, Payment, StudentBill, Fee, Expense, Payslip,
                 LibraryIssue, LibraryBook, StudentReportRemark, TimetableSlot, TeacherSubject,
-                ClassTeacher, Student, Parent, Class, Subject, Staff, User
+                ClassTeacher, Student, Parent, Class, Subject, Staff, User, Inventory, StockTransaction
             )
             
             deleted_modules = []
@@ -820,6 +825,12 @@ class SettingsPanel(QWidget):
                 session.query(LibraryIssue).delete()
                 session.query(LibraryBook).delete()
                 deleted_modules.append("Library Catalog")
+                
+            # 2b. Inventory & Stock
+            if self.chk_inventory.isChecked():
+                session.query(StockTransaction).delete()
+                session.query(Inventory).delete()
+                deleted_modules.append("Inventory & Stock Records")
                 
             # 3. Exams & Grades
             if self.chk_exams.isChecked():
@@ -862,6 +873,13 @@ class SettingsPanel(QWidget):
                 session.query(TeacherSubject).delete()
                 session.query(ClassTeacher).delete()
                 session.query(Payslip).delete()
+                
+                # Nullify remaining foreign key references
+                session.query(StockTransaction).update({StockTransaction.staff_id: None})
+                session.query(Payment).update({Payment.received_by: None})
+                session.query(Expense).update({Expense.recorded_by: None})
+                session.query(Result).update({Result.teacher_id: None})
+                session.flush()
                 
                 session.query(Staff).filter(Staff.user_id != self.user.id).delete()
                 session.query(User).filter(User.id != self.user.id).delete()

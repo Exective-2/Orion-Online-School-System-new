@@ -2,7 +2,7 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QFrame, QLabel, 
     QLineEdit, QComboBox, QPushButton, QTableWidget, QTableWidgetItem,
     QHeaderView, QMessageBox, QDialog, QFormLayout, QDialogButtonBox,
-    QTabWidget
+    QTabWidget, QFileDialog
 )
 from PySide6.QtCore import Qt, Signal
 from database.connection import get_session
@@ -54,6 +54,16 @@ class InventoryPanel(QWidget):
         tx_btn.setObjectName("primary_btn")
         tx_btn.clicked.connect(self.open_tx_dialog)
         actions.addWidget(tx_btn)
+        
+        export_excel_btn = QPushButton("Export Excel")
+        export_excel_btn.setObjectName("secondary_btn")
+        export_excel_btn.clicked.connect(self.export_excel)
+        actions.addWidget(export_excel_btn)
+        
+        export_pdf_btn = QPushButton("Export PDF")
+        export_pdf_btn.setObjectName("secondary_btn")
+        export_pdf_btn.clicked.connect(self.export_pdf)
+        actions.addWidget(export_pdf_btn)
         
         tab_layout.addLayout(actions)
         
@@ -141,6 +151,79 @@ class InventoryPanel(QWidget):
     def refresh(self):
         self.load_catalog()
         self.load_tx_log()
+        
+    def export_excel(self):
+        from utils.exporter import export_to_excel
+        file_path, _ = QFileDialog.getSaveFileName(
+            self, "Save Inventory Excel Report", "inventory_report.xlsx", "Excel Files (*.xlsx)"
+        )
+        if not file_path:
+            return
+            
+        session = get_session()
+        try:
+            items = session.query(Inventory).all()
+            if not items:
+                QMessageBox.warning(self, "No Data", "No inventory items to export.")
+                return
+            data = [{
+                "item_id": item.id,
+                "item_name": item.item_name,
+                "category": item.category,
+                "description": item.description or "",
+                "total_quantity": item.total_quantity,
+                "available_quantity": item.available_quantity,
+                "unit": item.unit,
+                "condition": item.condition or "Good",
+                "location": item.location or "N/A"
+            } for item in items]
+            success, msg = export_to_excel(data, file_path, "Inventory")
+            if success:
+                QMessageBox.information(self, "Success", msg)
+            else:
+                QMessageBox.critical(self, "Error", msg)
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to export: {e}")
+        finally:
+            session.close()
+
+    def export_pdf(self):
+        from utils.pdf_generator import generate_inventory_report_pdf
+        import os
+        file_path, _ = QFileDialog.getSaveFileName(
+            self, "Save Inventory PDF Report", "inventory_report.pdf", "PDF Files (*.pdf)"
+        )
+        if not file_path:
+            return
+            
+        session = get_session()
+        try:
+            items = session.query(Inventory).all()
+            if not items:
+                QMessageBox.warning(self, "No Data", "No inventory items to export.")
+                return
+            headers = ["ID", "Item Name", "Category", "Total Qty", "Available Qty", "Unit", "Condition", "Location"]
+            rows = [[
+                item.id,
+                item.item_name,
+                item.category,
+                item.total_quantity,
+                item.available_quantity,
+                item.unit,
+                item.condition or "Good",
+                item.location or "N/A"
+            ] for item in items]
+            success, filepath = generate_inventory_report_pdf(headers, rows, file_path)
+            if success:
+                QMessageBox.information(self, "Success", f"Inventory PDF Report generated at:\n{filepath}")
+                if os.path.exists(filepath):
+                    os.startfile(filepath)
+            else:
+                QMessageBox.critical(self, "Error", f"Failed to generate PDF: {filepath}")
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to export: {e}")
+        finally:
+            session.close()
 
 class RegisterItemDialog(QDialog):
     data_changed = Signal()

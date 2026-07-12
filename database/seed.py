@@ -15,7 +15,7 @@ def hash_password(password: str) -> str:
     pwd_hash = hashlib.pbkdf2_hmac('sha256', password.encode('utf-8'), salt, 100000)
     return salt.hex() + ":" + pwd_hash.hex()
 
-def seed_database():
+def seed_database(seed_demo: bool = True):
     session = get_session()
     
     # Check if roles are already seeded
@@ -50,34 +50,37 @@ def seed_database():
     session.flush()
 
     # 2. Roles
-    roles_config = {
+    roles_permissions = {
         "Super Admin": list(perms.keys()),
-        "Admin/Headteacher": ["view_dashboard", "manage_students", "manage_staff", "manage_academics", "manage_attendance", "manage_exams", "manage_communication", "view_reports"],
+        "Admin/Headteacher": ["view_dashboard", "manage_students", "manage_staff", "manage_academics", "manage_attendance", "manage_exams", "manage_library", "manage_inventory", "manage_communication", "manage_settings", "view_reports"],
         "Accountant": ["view_dashboard", "manage_fees", "view_reports"],
-        "Teacher": ["view_dashboard", "manage_attendance", "manage_exams", "view_reports", "manage_communication"],
-        "Librarian": ["view_dashboard", "manage_library"],
-        "Storekeeper": ["view_dashboard", "manage_inventory"],
-        "Parent": ["view_dashboard"]
+        "Librarian": ["view_dashboard", "manage_library", "view_reports"],
+        "Storekeeper": ["view_dashboard", "manage_inventory", "view_reports"],
+        "Teacher": ["view_dashboard", "manage_attendance", "manage_exams", "manage_communication", "view_reports"]
     }
     
-    roles_objs = {}
-    for r_name, r_perms in roles_config.items():
-        role = Role(name=r_name, description=f"{r_name} user role")
-        role.permissions = [perms[p] for p in r_perms]
+    roles = {}
+    for r_name, r_perms in roles_permissions.items():
+        role = Role(name=r_name)
         session.add(role)
-        roles_objs[r_name] = role
+        for p_name in r_perms:
+            role.permissions.append(perms[p_name])
+        roles[r_name] = role
     session.flush()
 
     # 3. Users and Staff
     default_users = [
         ("admin", "admin123", "admin@orionschool.edu.gh", "Super Admin", "John", "Doe", "Admin Officer", "+233 24 111 2222"),
-        ("headteacher", "head123", "head@orionschool.edu.gh", "Admin/Headteacher", "Kofi", "Mensah", "Headteacher", "+233 24 333 4444"),
-        ("bursar", "bursar123", "bursar@orionschool.edu.gh", "Accountant", "Ama", "Osei", "Bursar", "+233 24 555 6666"),
-        ("teacher_kwame", "teacher123", "kwame@orionschool.edu.gh", "Teacher", "Kwame", "Appiah", "Teacher", "+233 24 777 8888"),
-        ("teacher_abena", "teacher123", "abena@orionschool.edu.gh", "Teacher", "Abena", "Ofori", "Teacher", "+233 24 999 0000"),
-        ("librarian", "lib123", "librarian@orionschool.edu.gh", "Librarian", "Ekow", "Arthur", "Librarian", "+233 20 111 3333"),
-        ("storekeeper", "store123", "store@orionschool.edu.gh", "Storekeeper", "Yao", "Dogbe", "Storekeeper", "+233 20 444 5555"),
     ]
+    if seed_demo:
+        default_users += [
+            ("headteacher", "head123", "head@orionschool.edu.gh", "Admin/Headteacher", "Kofi", "Mensah", "Headteacher", "+233 24 333 4444"),
+            ("bursar", "bursar123", "bursar@orionschool.edu.gh", "Accountant", "Ama", "Osei", "Bursar", "+233 24 555 6666"),
+            ("teacher_kwame", "teacher123", "kwame@orionschool.edu.gh", "Teacher", "Kwame", "Appiah", "Teacher", "+233 24 777 8888"),
+            ("teacher_abena", "teacher123", "abena@orionschool.edu.gh", "Teacher", "Abena", "Ofori", "Teacher", "+233 24 999 0000"),
+            ("librarian", "lib123", "librarian@orionschool.edu.gh", "Librarian", "Ekow", "Arthur", "Librarian", "+233 20 111 3333"),
+            ("storekeeper", "store123", "store@orionschool.edu.gh", "Storekeeper", "Yao", "Dogbe", "Storekeeper", "+233 20 444 5555"),
+        ]
     
     staff_objs = []
     for username, password, email, role_name, fname, lname, title, phone in default_users:
@@ -85,7 +88,7 @@ def seed_database():
             username=username,
             password_hash=hash_password(password),
             email=email,
-            role=roles_objs[role_name]
+            role=roles[role_name]
         )
         session.add(user)
         session.flush()
@@ -143,9 +146,10 @@ def seed_database():
     session.flush()
 
     # Assign class teachers
-    ct1 = ClassTeacher(class_id=classes_map["JHS 1"].id, staff_id=staff_objs[3].id, academic_year_id=ay_2025_2026.id) # Kwame Appiah class teacher of JHS 1
-    ct2 = ClassTeacher(class_id=classes_map["JHS 2"].id, staff_id=staff_objs[4].id, academic_year_id=ay_2025_2026.id) # Abena Ofori class teacher of JHS 2
-    session.add_all([ct1, ct2])
+    if seed_demo:
+        ct1 = ClassTeacher(class_id=classes_map["JHS 1"].id, staff_id=staff_objs[3].id, academic_year_id=ay_2025_2026.id) # Kwame Appiah class teacher of JHS 1
+        ct2 = ClassTeacher(class_id=classes_map["JHS 2"].id, staff_id=staff_objs[4].id, academic_year_id=ay_2025_2026.id) # Abena Ofori class teacher of JHS 2
+        session.add_all([ct1, ct2])
 
     # 6. Subjects
     subjects_list = [
@@ -175,14 +179,28 @@ def seed_database():
     session.flush()
 
     # Assign teacher subjects
-    ts1 = TeacherSubject(staff_id=staff_objs[3].id, subject_id=subjects_map["MATH-JHS"].id, class_id=classes_map["JHS 1"].id)
-    ts2 = TeacherSubject(staff_id=staff_objs[3].id, subject_id=subjects_map["SCI-JHS"].id, class_id=classes_map["JHS 1"].id)
-    ts3 = TeacherSubject(staff_id=staff_objs[4].id, subject_id=subjects_map["ENG-JHS"].id, class_id=classes_map["JHS 1"].id)
-    ts4 = TeacherSubject(staff_id=staff_objs[4].id, subject_id=subjects_map["SOC-JHS"].id, class_id=classes_map["JHS 1"].id)
-    ts5 = TeacherSubject(staff_id=staff_objs[3].id, subject_id=subjects_map["MATH-JHS"].id, class_id=classes_map["JHS 2"].id)
-    ts6 = TeacherSubject(staff_id=staff_objs[4].id, subject_id=subjects_map["ENG-JHS"].id, class_id=classes_map["JHS 2"].id)
-    session.add_all([ts1, ts2, ts3, ts4, ts5, ts6])
-    session.flush()
+    if seed_demo:
+        ts1 = TeacherSubject(staff_id=staff_objs[3].id, subject_id=subjects_map["MATH-JHS"].id, class_id=classes_map["JHS 1"].id)
+        ts2 = TeacherSubject(staff_id=staff_objs[3].id, subject_id=subjects_map["SCI-JHS"].id, class_id=classes_map["JHS 1"].id)
+        ts3 = TeacherSubject(staff_id=staff_objs[4].id, subject_id=subjects_map["ENG-JHS"].id, class_id=classes_map["JHS 1"].id)
+        ts4 = TeacherSubject(staff_id=staff_objs[4].id, subject_id=subjects_map["SOC-JHS"].id, class_id=classes_map["JHS 1"].id)
+        ts5 = TeacherSubject(staff_id=staff_objs[3].id, subject_id=subjects_map["MATH-JHS"].id, class_id=classes_map["JHS 2"].id)
+        ts6 = TeacherSubject(staff_id=staff_objs[4].id, subject_id=subjects_map["ENG-JHS"].id, class_id=classes_map["JHS 2"].id)
+        session.add_all([ts1, ts2, ts3, ts4, ts5, ts6])
+        session.flush()
+
+    if not seed_demo:
+        audit = AuditLog(
+            user_id=1,
+            action="Database Initialize",
+            table_name="All",
+            details="Initial system setup and database seeder run completed successfully (Fresh Install)."
+        )
+        session.add(audit)
+        session.commit()
+        session.close()
+        print("Database seeding (fresh) completed successfully.")
+        return
 
     # 7. Parents
     parents_data = [

@@ -521,6 +521,7 @@ class StudentProfileDialog(QDialog):
     def __init__(self, student_id, parent_widget=None):
         super().__init__(parent_widget)
         self.student_id = student_id
+        self.user = parent_widget.user if parent_widget else None
         self.setWindowTitle(f"Student Profile - {student_id}")
         self.setMinimumWidth(500)
         self.init_ui()
@@ -568,10 +569,23 @@ class StudentProfileDialog(QDialog):
         # Action Buttons
         btn_layout = QHBoxLayout()
         
+        is_admin_or_head = False
+        if self.user and self.user.role:
+            is_admin_or_head = self.user.role.name in ["Super Admin", "Admin/Headteacher"]
+            
+        if is_admin_or_head:
+            delete_btn = QPushButton("Delete Student")
+            delete_btn.setObjectName("danger_btn")
+            delete_btn.setStyleSheet("background-color: #ef4444; color: white;")
+            delete_btn.clicked.connect(self.delete_student)
+            btn_layout.addWidget(delete_btn)
+            
         admission_pdf_btn = QPushButton("Admission Slip")
         admission_pdf_btn.setObjectName("secondary_btn")
         admission_pdf_btn.clicked.connect(self.generate_admission_pdf)
         btn_layout.addWidget(admission_pdf_btn)
+        
+        btn_layout.addStretch()
         
         btn_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel)
         btn_box.accepted.connect(self.save_data)
@@ -666,6 +680,33 @@ class StudentProfileDialog(QDialog):
             QMessageBox.information(self, "Success", f"Admission Slip PDF generated at:\n{filepath}")
         else:
             QMessageBox.warning(self, "Failed", f"Failed to generate admission slip:\n{filepath}")
+            
+    def delete_student(self):
+        confirm = QMessageBox.question(
+            self, "Confirm Delete",
+            f"Are you sure you want to permanently delete student {self.student_id}?\n"
+            "This will delete all their attendance records, exam results, and fee bills. This action cannot be undone.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
+        if confirm == QMessageBox.StandardButton.No:
+            return
+            
+        session = get_session()
+        try:
+            student = session.query(Student).filter(Student.id == self.student_id).first()
+            if student:
+                session.delete(student)
+                session.commit()
+                QMessageBox.information(self, "Success", "Student record deleted successfully.")
+                self.data_changed.emit()
+                self.accept()
+            else:
+                QMessageBox.warning(self, "Error", "Student record not found.")
+        except Exception as e:
+            session.rollback()
+            QMessageBox.critical(self, "Error", f"Failed to delete student: {e}")
+        finally:
+            session.close()
 
 class AdmitStudentDialog(QDialog):
     data_changed = Signal()

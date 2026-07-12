@@ -2,7 +2,7 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QFrame, QLabel, 
     QLineEdit, QComboBox, QPushButton, QTableWidget, QTableWidgetItem,
     QHeaderView, QMessageBox, QDialog, QFormLayout, QDialogButtonBox,
-    QTabWidget, QDateEdit
+    QTabWidget, QDateEdit, QFileDialog
 )
 from PySide6.QtCore import Qt, QDate, Signal
 from database.connection import get_session
@@ -54,6 +54,16 @@ class LibraryPanel(QWidget):
         add_book_btn.setObjectName("primary_btn")
         add_book_btn.clicked.connect(self.open_add_book_dialog)
         actions.addWidget(add_book_btn)
+        
+        export_excel_btn = QPushButton("Export Excel")
+        export_excel_btn.setObjectName("secondary_btn")
+        export_excel_btn.clicked.connect(self.export_excel)
+        actions.addWidget(export_excel_btn)
+        
+        export_pdf_btn = QPushButton("Export PDF")
+        export_pdf_btn.setObjectName("secondary_btn")
+        export_pdf_btn.clicked.connect(self.export_pdf)
+        actions.addWidget(export_pdf_btn)
         
         tab_layout.addLayout(actions)
         
@@ -347,6 +357,78 @@ class LibraryPanel(QWidget):
         self.load_books()
         self.load_issues()
         self.load_overdue_log()
+        
+    def export_excel(self):
+        from utils.exporter import export_to_excel
+        file_path, _ = QFileDialog.getSaveFileName(
+            self, "Save Library Excel Report", "library_books_report.xlsx", "Excel Files (*.xlsx)"
+        )
+        if not file_path:
+            return
+            
+        session = get_session()
+        try:
+            books = session.query(LibraryBook).all()
+            if not books:
+                QMessageBox.warning(self, "No Data", "No library books to export.")
+                return
+            data = [{
+                "book_id": b.id,
+                "title": b.title,
+                "author": b.author,
+                "isbn": b.isbn or "N/A",
+                "category": b.category or "General",
+                "total_copies": b.total_copies,
+                "available_copies": b.available_copies,
+                "location": b.location or "N/A"
+            } for b in books]
+            success, msg = export_to_excel(data, file_path, "Library Books")
+            if success:
+                QMessageBox.information(self, "Success", msg)
+            else:
+                QMessageBox.critical(self, "Error", msg)
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to export: {e}")
+        finally:
+            session.close()
+
+    def export_pdf(self):
+        from utils.pdf_generator import generate_library_report_pdf
+        import os
+        file_path, _ = QFileDialog.getSaveFileName(
+            self, "Save Library PDF Report", "library_books_report.pdf", "PDF Files (*.pdf)"
+        )
+        if not file_path:
+            return
+            
+        session = get_session()
+        try:
+            books = session.query(LibraryBook).all()
+            if not books:
+                QMessageBox.warning(self, "No Data", "No books in library to export.")
+                return
+            headers = ["ID", "Title", "Author", "ISBN", "Category", "Total Copies", "Available Copies", "Location"]
+            rows = [[
+                b.id,
+                b.title,
+                b.author,
+                b.isbn or "N/A",
+                b.category or "General",
+                b.total_copies,
+                b.available_copies,
+                b.location or "N/A"
+            ] for b in books]
+            success, filepath = generate_library_report_pdf(headers, rows, file_path)
+            if success:
+                QMessageBox.information(self, "Success", f"Library Books PDF Report generated at:\n{filepath}")
+                if os.path.exists(filepath):
+                    os.startfile(filepath)
+            else:
+                QMessageBox.critical(self, "Error", f"Failed to generate PDF: {filepath}")
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to export: {e}")
+        finally:
+            session.close()
 
 class AddBookDialog(QDialog):
     data_changed = Signal()

@@ -1,4 +1,4 @@
-﻿; =============================================================================
+﻿ ; =============================================================================
 ;  Orion School Management System - Inno Setup 6 Installer Script
 ;  Compile with Inno Setup 6: https://jrsoftware.org/isinfo.php
 ;
@@ -42,6 +42,7 @@ PrivilegesRequired=admin
 MinVersion=10.0
 UninstallDisplayIcon={app}\{#AppExeName}
 UninstallDisplayName={#AppName}
+UsedUserAreasWarning=no
 DisableProgramGroupPage=no
 DisableDirPage=no
 DirExistsWarning=auto

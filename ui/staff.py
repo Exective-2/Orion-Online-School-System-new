@@ -2,7 +2,8 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QFrame, QLabel, 
     QLineEdit, QComboBox, QPushButton, QTableWidget, QTableWidgetItem,
     QHeaderView, QDialog, QFormLayout, QDialogButtonBox, QMessageBox,
-    QDateEdit, QTabWidget, QCheckBox, QFileDialog
+    QDateEdit, QTabWidget, QCheckBox, QFileDialog, QInputDialog,
+    QDoubleSpinBox
 )
 from PySide6.QtCore import Qt, QDate, Signal
 from database.connection import get_session
@@ -157,12 +158,14 @@ class StaffPanel(QWidget):
         # Payslips Table
         self.payslips_table = QTableWidget()
         self.payslips_table.verticalHeader().setDefaultSectionSize(40)
-        self.payslips_table.setColumnCount(8)
+        self.payslips_table.setColumnCount(9)
         self.payslips_table.setHorizontalHeaderLabels([
-            "Staff Name", "Role", "Base Salary", "Allowances", "Tax (PAYE)", "Pension (SSNIT)", "Net Pay", "Action"
+            "Staff Name", "Role", "Base Salary", "Allowances", "Tax (PAYE)", "Pension (SSNIT)", "Net Pay", "PDF", "Edit"
         ])
         self.payslips_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.payslips_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+        self.payslips_table.horizontalHeader().setSectionResizeMode(7, QHeaderView.ResizeMode.ResizeToContents)
+        self.payslips_table.horizontalHeader().setSectionResizeMode(8, QHeaderView.ResizeMode.ResizeToContents)
         p_layout.addWidget(self.payslips_table)
 
     def load_payroll_periods(self):
@@ -298,11 +301,21 @@ class StaffPanel(QWidget):
                 self.payslips_table.setItem(i, 5, pension_item)
                 self.payslips_table.setItem(i, 6, net_item)
                 
-                # Action Button
-                print_btn = QPushButton("PDF Payslip")
+                # PDF Action Button
+                print_btn = QPushButton("PDF")
                 print_btn.setObjectName("secondary_btn")
                 print_btn.clicked.connect(lambda checked=False, sid=sl.id: self.generate_payslip(sid))
                 self.payslips_table.setCellWidget(i, 7, print_btn)
+                
+                # Edit Payslip Button (restricted to Admin/Bursar roles)
+                can_edit = False
+                if self.user and self.user.role:
+                    can_edit = self.user.role.name in ["Super Admin", "Admin/Headteacher", "Accountant"]
+                if can_edit:
+                    edit_btn = QPushButton("Edit")
+                    edit_btn.setObjectName("primary_btn")
+                    edit_btn.clicked.connect(lambda checked=False, sid=sl.id: self.open_edit_payslip(sid))
+                    self.payslips_table.setCellWidget(i, 8, edit_btn)
                 
         except Exception as e:
             print(f"Error loading payslips: {e}")
@@ -336,6 +349,11 @@ class StaffPanel(QWidget):
             QMessageBox.critical(self, "Error", f"Error generating payslip: {e}")
         finally:
             session.close()
+
+    def open_edit_payslip(self, payslip_id):
+        dialog = EditPayslipDialog(payslip_id, self.user, self)
+        dialog.payslip_saved.connect(self.load_payslips)
+        dialog.exec()
 
     def bulk_upload_staff(self):
         dialog = BulkUploadStaffDialog(self)
@@ -479,6 +497,8 @@ class StaffDetailsDialog(QDialog):
     def __init__(self, staff_id, parent_widget=None):
         super().__init__(parent_widget)
         self.staff_id = staff_id
+        self.parent_panel = parent_widget
+        self.user = parent_widget.user if parent_widget else None
         self.setWindowTitle(f"Staff Profile Details")
         self.setMinimumWidth(500)
         self.init_ui()
@@ -537,10 +557,33 @@ class StaffDetailsDialog(QDialog):
         
         layout.addWidget(tabs)
         
+        # Action Buttons
+        btn_layout = QHBoxLayout()
+        
+        is_admin_or_head = False
+        if self.user and self.user.role:
+            is_admin_or_head = self.user.role.name in ["Super Admin", "Admin/Headteacher"]
+            
+        if is_admin_or_head:
+            delete_btn = QPushButton("Delete Staff")
+            delete_btn.setObjectName("danger_btn")
+            delete_btn.setStyleSheet("background-color: #ef4444; color: white;")
+            delete_btn.clicked.connect(self.delete_staff)
+            btn_layout.addWidget(delete_btn)
+            
+            reset_pwd_btn = QPushButton("Reset Password")
+            reset_pwd_btn.setObjectName("secondary_btn")
+            reset_pwd_btn.clicked.connect(self.reset_password)
+            btn_layout.addWidget(reset_pwd_btn)
+            
+        btn_layout.addStretch()
+        
         btn_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel)
         btn_box.accepted.connect(self.save_data)
         btn_box.rejected.connect(self.reject)
-        layout.addWidget(btn_box)
+        
+        btn_layout.addWidget(btn_box)
+        layout.addLayout(btn_layout)
         
     def load_data(self):
         session = get_session()
@@ -608,6 +651,80 @@ class StaffDetailsDialog(QDialog):
                 self.accept()
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to save staff info:\n{e}")
+        finally:
+            session.close()
+            
+    def delete_staff(self):
+        confirm = QMessageBox.question(
+            self, "Confirm Delete",
+            "Are you sure you want to permanently delete this staff member?\n"
+            "This will delete all their attendance records and payslips. Their login account will also be deleted. This action cannot be undone.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
+        if confirm == QMessageBox.StandardButton.No:
+            return
+            
+        session = get_session()
+        try:
+            staff = session.query(Staff).filter(Staff.id == self.staff_id).first()
+            if staff:
+                # Nullify foreign key references in related tables to prevent constraint violations
+                from database.models import Result, Payment, StockTransaction, LibraryIssue, Announcement, Expense
+                session.query(Result).filter(Result.teacher_id == self.staff_id).update({Result.teacher_id: None})
+                session.query(Payment).filter(Payment.received_by == self.staff_id).update({Payment.received_by: None})
+                session.query(StockTransaction).filter(StockTransaction.staff_id == self.staff_id).update({StockTransaction.staff_id: None})
+                session.query(LibraryIssue).filter(LibraryIssue.issued_by == self.staff_id).update({LibraryIssue.issued_by: None})
+                session.query(Announcement).filter(Announcement.created_by == self.staff_id).update({Announcement.created_by: None})
+                session.query(Expense).filter(Expense.recorded_by == self.staff_id).update({Expense.recorded_by: None})
+                session.flush()
+
+                # User account to delete
+                user_id = staff.user_id
+                
+                # Delete staff
+                session.delete(staff)
+                
+                # Delete user account if exists
+                if user_id:
+                    user_obj = session.query(User).filter(User.id == user_id).first()
+                    if user_obj:
+                        session.delete(user_obj)
+                        
+                session.commit()
+                QMessageBox.information(self, "Success", "Staff record and user account deleted successfully.")
+                self.data_changed.emit()
+                self.accept()
+            else:
+                QMessageBox.warning(self, "Error", "Staff record not found.")
+        except Exception as e:
+            session.rollback()
+            QMessageBox.critical(self, "Error", f"Failed to delete staff: {e}")
+        finally:
+            session.close()
+
+    def reset_password(self):
+        session = get_session()
+        try:
+            staff = session.query(Staff).filter(Staff.id == self.staff_id).first()
+            if not staff or not staff.user:
+                QMessageBox.warning(self, "No Account", "This staff member does not have a login user account.")
+                return
+                
+            username = staff.user.username
+            text, ok = QInputDialog.getText(
+                self, "Reset Password", f"Enter new password for user '{username}':",
+                QLineEdit.EchoMode.Password, ""
+            )
+            if ok and text:
+                if len(text) < 6:
+                    QMessageBox.warning(self, "Validation Error", "Password must be at least 6 characters.")
+                    return
+                staff.user.password_hash = hash_password(text)
+                session.commit()
+                QMessageBox.information(self, "Success", f"Password for '{username}' has been successfully reset.")
+        except Exception as e:
+            session.rollback()
+            QMessageBox.critical(self, "Error", f"Failed to reset password: {e}")
         finally:
             session.close()
 
@@ -879,6 +996,167 @@ class BulkUploadStaffDialog(QDialog):
         self.selected_file_path = file_path
         self.accept()
 
-
-
+class EditPayslipDialog(QDialog):
+    payslip_saved = Signal()
+    
+    def __init__(self, payslip_id, user, parent_widget=None):
+        super().__init__(parent_widget)
+        self.payslip_id = payslip_id
+        self.user = user
+        self.setWindowTitle("Edit Payslip")
+        self.setMinimumWidth(420)
+        self._loading = True
+        self.init_ui()
+        self.load_payslip_data()
+        self._loading = False
+        
+    def init_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setSpacing(14)
+        
+        info_lbl = QLabel("Edit the payroll components below. Net Pay updates automatically.")
+        info_lbl.setWordWrap(True)
+        info_lbl.setStyleSheet("color: #94a3b8; font-size: 12px;")
+        layout.addWidget(info_lbl)
+        
+        form_frame = QFrame()
+        form_frame.setObjectName("card")
+        form_layout = QFormLayout(form_frame)
+        form_layout.setSpacing(12)
+        
+        # Basic Salary
+        self.basic_spin = QDoubleSpinBox()
+        self.basic_spin.setRange(0.0, 999999.99)
+        self.basic_spin.setDecimals(2)
+        self.basic_spin.setPrefix("GHS ")
+        self.basic_spin.setSingleStep(50.0)
+        form_layout.addRow("Basic Salary:", self.basic_spin)
+        
+        # Allowances
+        self.allow_spin = QDoubleSpinBox()
+        self.allow_spin.setRange(0.0, 999999.99)
+        self.allow_spin.setDecimals(2)
+        self.allow_spin.setPrefix("GHS ")
+        self.allow_spin.setSingleStep(50.0)
+        form_layout.addRow("Allowances:", self.allow_spin)
+        
+        # Tax (PAYE)
+        self.tax_spin = QDoubleSpinBox()
+        self.tax_spin.setRange(0.0, 999999.99)
+        self.tax_spin.setDecimals(2)
+        self.tax_spin.setPrefix("GHS ")
+        self.tax_spin.setSingleStep(10.0)
+        form_layout.addRow("Tax — PAYE:", self.tax_spin)
+        
+        # Recalc tax hint button
+        recalc_tax_btn = QPushButton("↺ Auto-calc Tax (15%)")
+        recalc_tax_btn.setObjectName("secondary_btn")
+        recalc_tax_btn.setFixedHeight(28)
+        recalc_tax_btn.clicked.connect(self._recalc_tax)
+        form_layout.addRow("", recalc_tax_btn)
+        
+        # SSNIT Pension
+        self.ssnit_spin = QDoubleSpinBox()
+        self.ssnit_spin.setRange(0.0, 999999.99)
+        self.ssnit_spin.setDecimals(2)
+        self.ssnit_spin.setPrefix("GHS ")
+        self.ssnit_spin.setSingleStep(10.0)
+        form_layout.addRow("Pension — SSNIT:", self.ssnit_spin)
+        
+        # Recalc SSNIT hint button
+        recalc_ssnit_btn = QPushButton("↺ Auto-calc SSNIT (5.5%)")
+        recalc_ssnit_btn.setObjectName("secondary_btn")
+        recalc_ssnit_btn.setFixedHeight(28)
+        recalc_ssnit_btn.clicked.connect(self._recalc_ssnit)
+        form_layout.addRow("", recalc_ssnit_btn)
+        
+        # Net Pay — read-only live display
+        self.net_lbl = QLabel("GHS 0.00")
+        self.net_lbl.setStyleSheet("font-size: 18px; font-weight: bold; color: #10b981;")
+        form_layout.addRow("Net Pay (Auto):", self.net_lbl)
+        
+        layout.addWidget(form_frame)
+        
+        # Connect value changes to live recalculation
+        self.basic_spin.valueChanged.connect(self._update_net)
+        self.allow_spin.valueChanged.connect(self._update_net)
+        self.tax_spin.valueChanged.connect(self._update_net)
+        self.ssnit_spin.valueChanged.connect(self._update_net)
+        
+        btn_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel)
+        btn_box.accepted.connect(self.save_payslip)
+        btn_box.rejected.connect(self.reject)
+        layout.addWidget(btn_box)
+        
+    def load_payslip_data(self):
+        session = get_session()
+        try:
+            from database.models import Payslip
+            sl = session.query(Payslip).filter(Payslip.id == self.payslip_id).first()
+            if sl:
+                self.setWindowTitle(f"Edit Payslip — {sl.staff.first_name} {sl.staff.last_name} ({sl.pay_period})")
+                self.basic_spin.setValue(sl.base_salary or 0.0)
+                self.allow_spin.setValue(sl.allowances or 0.0)
+                self.tax_spin.setValue(sl.tax_deductions or 0.0)
+                self.ssnit_spin.setValue(sl.pension_deductions or 0.0)
+                self._update_net()
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to load payslip: {e}")
+        finally:
+            session.close()
+            
+    def _update_net(self):
+        gross = self.basic_spin.value() + self.allow_spin.value()
+        net = gross - self.tax_spin.value() - self.ssnit_spin.value()
+        self.net_lbl.setText(f"GHS {net:,.2f}")
+        if net >= 0:
+            self.net_lbl.setStyleSheet("font-size: 18px; font-weight: bold; color: #10b981;")
+        else:
+            self.net_lbl.setStyleSheet("font-size: 18px; font-weight: bold; color: #ef4444;")
+            
+    def _recalc_tax(self):
+        gross = self.basic_spin.value() + self.allow_spin.value()
+        self.tax_spin.setValue(round(gross * 0.15, 2))
+        
+    def _recalc_ssnit(self):
+        self.ssnit_spin.setValue(round(self.basic_spin.value() * 0.055, 2))
+        
+    def save_payslip(self):
+        session = get_session()
+        try:
+            from database.models import Payslip
+            sl = session.query(Payslip).filter(Payslip.id == self.payslip_id).first()
+            if not sl:
+                QMessageBox.warning(self, "Error", "Payslip record not found.")
+                return
+                
+            basic = self.basic_spin.value()
+            allowances = self.allow_spin.value()
+            tax = self.tax_spin.value()
+            ssnit = self.ssnit_spin.value()
+            net = (basic + allowances) - tax - ssnit
+            
+            sl.base_salary = basic
+            sl.allowances = allowances
+            sl.tax_deductions = tax
+            sl.pension_deductions = ssnit
+            sl.net_salary = net
+            
+            # Also sync staff base salary so future payroll generations pick it up
+            staff_obj = sl.staff
+            if staff_obj:
+                staff_obj.base_salary = basic
+                
+            session.commit()
+            QMessageBox.information(
+                self, "Saved",
+                f"Payslip updated.\nNet Pay: GHS {net:,.2f}"
+            )
+            self.payslip_saved.emit()
+            self.accept()
+        except Exception as e:
+            session.rollback()
+            QMessageBox.critical(self, "Error", f"Failed to save payslip: {e}")
+        finally:
+            session.close()
 

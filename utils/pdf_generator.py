@@ -1268,3 +1268,136 @@ def generate_timetable_pdf(class_name: str, term_name: str, headers: list, rows:
         return True, str(file_path)
     except Exception as e:
         return False, str(e)
+
+def generate_inventory_report_pdf(headers: list, rows: list, output_path: str = None) -> tuple[bool, str]:
+    """
+    Generates an A4 PDF containing the school inventory stock report.
+    """
+    try:
+        file_path = Path(output_path) if output_path else _get_pdf_dir() / "inventory_report.pdf"
+        doc = SimpleDocTemplate(
+            str(file_path),
+            pagesize=A4,
+            leftMargin=36,
+            rightMargin=36,
+            topMargin=36,
+            bottomMargin=36
+        )
+        
+        styles = getSampleStyleSheet()
+        body_style = ParagraphStyle(
+            'BodyInv',
+            fontName='Helvetica',
+            fontSize=9,
+            textColor=colors.HexColor("#334155")
+        )
+        th_style = ParagraphStyle(
+            'TableHeaderInv',
+            parent=body_style,
+            fontName='Helvetica-Bold',
+            textColor=colors.white
+        )
+        
+        story = []
+        add_pdf_header(story, "INVENTORY STOCK REPORT")
+        
+        title_style = ParagraphStyle(
+            'SubInv',
+            fontName='Helvetica-Bold',
+            fontSize=10,
+            alignment=1,
+            textColor=colors.HexColor("#1e293b"),
+            spaceAfter=12
+        )
+        story.append(Paragraph(f"DATE GENERATED: {datetime.date.today().strftime('%Y-%m-%d')}", title_style))
+        
+        table_rows = []
+        table_rows.append([Paragraph(f"<b>{h}</b>", th_style) for h in headers])
+        
+        for r in rows:
+            table_rows.append([Paragraph(str(cell), body_style) for cell in r])
+            
+        col_count = len(headers)
+        col_width = 520.0 / col_count
+        
+        t = Table(table_rows, colWidths=[col_width] * col_count)
+        t.setStyle(TableStyle([
+            ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#2563eb")),
+            ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor("#cbd5e1")),
+            ('ROWBACKGROUNDS', (0,1), (-1,-1), [colors.white, colors.HexColor("#f8fafc")]),
+            ('PADDING', (0,0), (-1,-1), 6),
+            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+        ]))
+        
+        story.append(t)
+        doc.build(story)
+        return True, str(file_path)
+    except Exception as e:
+        return False, str(e)
+
+def generate_library_report_pdf(headers: list, rows: list, output_path: str = None) -> tuple[bool, str]:
+    """
+    Generates an A4 PDF containing the library books catalogue report.
+    """
+    try:
+        file_path = Path(output_path) if output_path else _get_pdf_dir() / "library_books_report.pdf"
+        doc = SimpleDocTemplate(
+            str(file_path),
+            pagesize=A4,
+            leftMargin=36,
+            rightMargin=36,
+            topMargin=36,
+            bottomMargin=36
+        )
+        
+        styles = getSampleStyleSheet()
+        body_style = ParagraphStyle(
+            'BodyLib',
+            fontName='Helvetica',
+            fontSize=9,
+            textColor=colors.HexColor("#334155")
+        )
+        th_style = ParagraphStyle(
+            'TableHeaderLib',
+            parent=body_style,
+            fontName='Helvetica-Bold',
+            textColor=colors.white
+        )
+        
+        story = []
+        add_pdf_header(story, "LIBRARY BOOK CATALOGUE REPORT")
+        
+        title_style = ParagraphStyle(
+            'SubLib',
+            fontName='Helvetica-Bold',
+            fontSize=10,
+            alignment=1,
+            textColor=colors.HexColor("#1e293b"),
+            spaceAfter=12
+        )
+        story.append(Paragraph(f"DATE GENERATED: {datetime.date.today().strftime('%Y-%m-%d')}", title_style))
+        
+        table_rows = []
+        table_rows.append([Paragraph(f"<b>{h}</b>", th_style) for h in headers])
+        
+        for r in rows:
+            table_rows.append([Paragraph(str(cell), body_style) for cell in r])
+            
+        col_count = len(headers)
+        col_width = 520.0 / col_count
+        
+        t = Table(table_rows, colWidths=[col_width] * col_count)
+        t.setStyle(TableStyle([
+            ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#2563eb")),
+            ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor("#cbd5e1")),
+            ('ROWBACKGROUNDS', (0,1), (-1,-1), [colors.white, colors.HexColor("#f8fafc")]),
+            ('PADDING', (0,0), (-1,-1), 6),
+            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+        ]))
+        
+        story.append(t)
+        doc.build(story)
+        return True, str(file_path)
+    except Exception as e:
+        return False, str(e)
+
