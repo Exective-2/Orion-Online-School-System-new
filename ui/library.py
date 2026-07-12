@@ -432,14 +432,18 @@ class IssueBookDialog(QDialog):
         form_layout = QFormLayout()
         
         self.book_combo = QComboBox()
-        self.student_combo = QComboBox()
+        self.borrower_type_combo = QComboBox()
+        self.borrower_type_combo.addItems(["Student", "Staff Member"])
+        self.borrower_type_combo.currentTextChanged.connect(self.on_borrower_type_changed)
+        self.borrower_combo = QComboBox()
         
         self.due_date_edit = QDateEdit()
         self.due_date_edit.setCalendarPopup(True)
         self.due_date_edit.setDate(QDate.currentDate().addDays(14)) # 14 days standard lend
         
         form_layout.addRow("Select Book:", self.book_combo)
-        form_layout.addRow("Select Student:", self.student_combo)
+        form_layout.addRow("Borrower Type:", self.borrower_type_combo)
+        form_layout.addRow("Select Borrower:", self.borrower_combo)
         form_layout.addRow("Lending Due Date:", self.due_date_edit)
         
         layout.addLayout(form_layout)
@@ -449,6 +453,23 @@ class IssueBookDialog(QDialog):
         btn_box.rejected.connect(self.reject)
         layout.addWidget(btn_box)
         
+    def on_borrower_type_changed(self):
+        self.borrower_combo.clear()
+        session = get_session()
+        try:
+            if self.borrower_type_combo.currentText() == "Student":
+                students = session.query(Student).filter(Student.status == "Active").order_by(Student.last_name.asc()).all()
+                for s in students:
+                    self.borrower_combo.addItem(f"{s.last_name}, {s.first_name} ({s.id})", s.id)
+            else:
+                staff_list = session.query(Staff).filter(Staff.status == "Active").order_by(Staff.last_name.asc()).all()
+                for st in staff_list:
+                    self.borrower_combo.addItem(f"{st.last_name}, {st.first_name} (ID: {st.id})", st.id)
+        except Exception as e:
+            print(f"Error loading borrowers: {e}")
+        finally:
+            session.close()
+            
     def load_combos(self):
         session = get_session()
         try:
@@ -456,21 +477,19 @@ class IssueBookDialog(QDialog):
             books = session.query(LibraryBook).filter(LibraryBook.available_copies > 0).all()
             for b in books:
                 self.book_combo.addItem(f"{b.title} ({b.available_copies} avail)", b.id)
-                
-            # Students
-            students = session.query(Student).filter(Student.status == "Active").all()
-            for s in students:
-                self.student_combo.addItem(f"{s.last_name}, {s.first_name} ({s.id})", s.id)
         except Exception as e:
             print(f"Error loading combos: {e}")
         finally:
             session.close()
             
+        self.on_borrower_type_changed()
+            
     def save_issue(self):
         book_id = self.book_combo.currentData()
-        student_id = self.student_combo.currentData()
+        borrower_id = self.borrower_combo.currentData()
+        borrower_type = self.borrower_type_combo.currentText()
         
-        if not book_id or not student_id:
+        if not book_id or not borrower_id:
             QMessageBox.warning(self, "Validation Error", "Please select both a book and borrower.")
             return
             
@@ -495,7 +514,8 @@ class IssueBookDialog(QDialog):
                 # Log issue
                 issue = LibraryIssue(
                     book_id=book_id,
-                    student_id=student_id,
+                    student_id=borrower_id if borrower_type == "Student" else None,
+                    staff_id=borrower_id if borrower_type == "Staff Member" else None,
                     due_date=due_date
                 )
                 session.add(issue)
