@@ -567,6 +567,160 @@ def seed_database(seed_demo: bool = True):
     session.close()
     print("Database seeding completed successfully.")
 
+def seed_fresh_branch(branch_db_path, branch_name: str = "New Branch") -> bool:
+    """
+    Minimal seed for a brand-new branch database.
+
+    Creates the full schema (roles, permissions, system classes, default
+    academic year) but NO demo students, staff, fees, or attendance data.
+    The branch admin account is created separately via the System Admin Portal.
+
+    Parameters
+    ----------
+    branch_db_path : str or pathlib.Path
+        Absolute path to the new branch's SQLite file.
+    branch_name : str
+        Used in the audit log entry only.
+
+    Returns
+    -------
+    bool  True on success, False on failure.
+    """
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+    from sqlalchemy.pool import NullPool
+    from database.models import Base
+
+    try:
+        engine = create_engine(
+            f"sqlite:///{branch_db_path}",
+            connect_args={"check_same_thread": False},
+            poolclass=NullPool,
+            echo=False,
+        )
+        Base.metadata.create_all(bind=engine)
+
+        SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+        session = SessionLocal()
+
+        # Guard: already seeded?
+        if session.query(Role).first():
+            session.close()
+            engine.dispose()
+            return True
+
+        # 1. Permissions
+        permissions_list = [
+            ("view_dashboard", "View the dashboard stats and graphs"),
+            ("manage_students", "Admit, edit, promote, and withdraw students"),
+            ("manage_staff", "Register and edit staff details, view performance"),
+            ("manage_academics", "Setup academic years, terms, classes, and subjects"),
+            ("manage_attendance", "Take daily attendance for students and staff"),
+            ("manage_exams", "Set up examinations, enter scores, and generate report cards"),
+            ("manage_fees", "Configure fee structures, record payments, and view finances"),
+            ("manage_library", "Manage book registry and book borrowing logs"),
+            ("manage_inventory", "Manage school assets and supplies stock list"),
+            ("manage_communication", "Post school announcements and notices"),
+            ("manage_settings", "Access system configurations, backups, and user settings"),
+            ("view_reports", "Access student, financial, attendance, and academic reports"),
+        ]
+        perms = {}
+        for p_name, p_desc in permissions_list:
+            perm = Permission(name=p_name, description=p_desc)
+            session.add(perm)
+            perms[p_name] = perm
+        session.flush()
+
+        # 2. Roles
+        roles_permissions = {
+            "Super Admin": list(perms.keys()),
+            "Admin/Headteacher": [
+                "view_dashboard", "manage_students", "manage_staff", "manage_academics",
+                "manage_attendance", "manage_exams", "manage_library", "manage_inventory",
+                "manage_communication", "manage_settings", "view_reports",
+            ],
+            "Accountant": ["view_dashboard", "manage_fees", "view_reports"],
+            "Librarian": ["view_dashboard", "manage_library", "view_reports"],
+            "Storekeeper": ["view_dashboard", "manage_inventory", "view_reports"],
+            "Teacher": ["view_dashboard", "manage_attendance", "manage_exams", "manage_communication", "view_reports"],
+        }
+        roles = {}
+        for r_name, r_perms in roles_permissions.items():
+            role = Role(name=r_name)
+            session.add(role)
+            for p_name in r_perms:
+                role.permissions.append(perms[p_name])
+            roles[r_name] = role
+        session.flush()
+
+        # 3. Default academic year (current calendar year)
+        import datetime as _dt
+        year = _dt.date.today().year
+        ay = AcademicYear(
+            name=f"{year}/{year + 1}",
+            start_date=_dt.date(year, 9, 1),
+            end_date=_dt.date(year + 1, 7, 31),
+            is_current=True,
+        )
+        session.add(ay)
+        session.flush()
+
+        t1 = Term(academic_year_id=ay.id, name="Term 1",
+                  start_date=_dt.date(year, 9, 1), end_date=_dt.date(year, 12, 18), is_current=True)
+        t2 = Term(academic_year_id=ay.id, name="Term 2",
+                  start_date=_dt.date(year + 1, 1, 6), end_date=_dt.date(year + 1, 4, 9), is_current=False)
+        t3 = Term(academic_year_id=ay.id, name="Term 3",
+                  start_date=_dt.date(year + 1, 5, 5), end_date=_dt.date(year + 1, 7, 24), is_current=False)
+        session.add_all([t1, t2, t3])
+        session.flush()
+
+        # 4. Standard classes
+        classes_list = [
+            ("Kindergarten 1", "Kindergarten", "A"),
+            ("Kindergarten 2", "Kindergarten", "A"),
+            ("Primary 1", "Primary", "A"), ("Primary 2", "Primary", "A"),
+            ("Primary 3", "Primary", "A"), ("Primary 4", "Primary", "A"),
+            ("Primary 5", "Primary", "A"), ("Primary 6", "Primary", "A"),
+            ("JHS 1", "JHS", "A"), ("JHS 2", "JHS", "A"), ("JHS 3", "JHS", "A"),
+        ]
+        for c_name, c_level, c_stream in classes_list:
+            session.add(Class(name=c_name, level=c_level, stream=c_stream))
+        session.flush()
+
+        # 5. Standard subjects
+        subjects_list = [
+            ("Mathematics", "MATH-JHS", "JHS"), ("English Language", "ENG-JHS", "JHS"),
+            ("Integrated Science", "SCI-JHS", "JHS"), ("Social Studies", "SOC-JHS", "JHS"),
+            ("Computing", "COMP-JHS", "JHS"), ("Religious and Moral Education (RME)", "RME-JHS", "JHS"),
+            ("Ghanaian Language (Twi)", "TWI-JHS", "JHS"),
+            ("Mathematics", "MATH-PRI", "Primary"), ("English Language", "ENG-PRI", "Primary"),
+            ("Science", "SCI-PRI", "Primary"), ("ICT", "COMP-PRI", "Primary"),
+            ("Numeracy", "NUM-KG", "Kindergarten"), ("Literacy", "LIT-KG", "Kindergarten"),
+            ("Creative Activities", "ART-KG", "Kindergarten"),
+        ]
+        for s_name, s_code, s_level in subjects_list:
+            session.add(Subject(name=s_name, code=s_code, class_level=s_level))
+        session.flush()
+
+        # 6. Audit log
+        session.add(AuditLog(
+            user_id=None,
+            action="Branch Initialize",
+            table_name="All",
+            details=f"Fresh branch database initialized for '{branch_name}'. No demo data seeded.",
+        ))
+
+        session.commit()
+        session.close()
+        engine.dispose()
+        print(f"[seed] Fresh branch seeded: {branch_db_path}")
+        return True
+
+    except Exception as e:
+        print(f"[seed] seed_fresh_branch error: {e}")
+        return False
+
+
 if __name__ == "__main__":
     init_db()
     seed_database()

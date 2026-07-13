@@ -123,8 +123,13 @@ class MainWindow(QMainWindow):
         
         header_layout.addStretch()
         
-        # Term Status Label
-        term_label = QLabel(f"{config.get('school_name', '')} | Term 1")
+        # Branch + Term Status Label
+        try:
+            from database.branch_context import get_active_branch_name
+            branch_display = get_active_branch_name()
+        except Exception:
+            branch_display = config.get('school_name', '')
+        term_label = QLabel(f"📍 {branch_display} | Term 1")
         term_label.setStyleSheet("color: #64748b; font-weight: bold; margin-right: 15px;")
         header_layout.addWidget(term_label)
         
