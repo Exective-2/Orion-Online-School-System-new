@@ -1,0 +1,1735 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Orion School Management System</title>
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <!-- SheetJS (XLSX) for client-side Excel/CSV parsing -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    
+    <!-- Stylesheet -->
+    <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body class="dark-theme">
+    
+    <!-- Toast Notifications -->
+    <div id="toast-container"></div>
+    
+    <div id="app">
+        <!-- ── 1. LOGIN SCREEN ── -->
+        <section id="view-login" class="view-panel active">
+            <div class="login-wrapper">
+                <div class="login-card glass-panel">
+                    <div class="login-header">
+                        <div class="login-logo"><i class="fa-solid fa-graduation-cap"></i> ORION</div>
+                        <h2 id="login-school-title">School Management System</h2>
+                        <p class="login-subtitle">Sign in to access your portal</p>
+                    </div>
+                    
+                    <form id="login-form">
+                        <div class="form-group" id="login-branch-group">
+                            <label for="login-branch"><i class="fa-solid fa-school"></i> Select Branch</label>
+                            <select id="login-branch" class="form-control">
+                                <option value="">— Select branch —</option>
+                            </select>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="login-username"><i class="fa-solid fa-user"></i> Username</label>
+                            <input type="text" id="login-username" class="form-control" placeholder="Enter username" required autocomplete="username">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="login-password"><i class="fa-solid fa-lock"></i> Password</label>
+                            <input type="password" id="login-password" class="form-control" placeholder="Enter password" required autocomplete="current-password">
+                        </div>
+                        
+                        <button type="submit" class="btn btn-primary btn-block btn-lg" id="btn-login-submit">
+                            Sign In <i class="fa-solid fa-arrow-right-to-bracket"></i>
+                        </button>
+                    </form>
+                    
+                    <div class="login-footer">
+                        <p>Contact administrator if you forgot your credentials.</p>
+                        <button class="btn-link" id="link-sysadmin-toggle">Login as System Administrator</button>
+                        <button class="btn-link" id="link-setup-wizard">System Setup Wizard</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+        
+        <!-- ── 2. SETUP WIZARD SCREEN ── -->
+        <section id="view-setup" class="view-panel">
+            <div class="setup-wrapper">
+                <div class="setup-card glass-panel">
+                    <div class="setup-header">
+                        <h2><i class="fa-solid fa-wand-magic-sparkles"></i> Orion School Setup Wizard</h2>
+                        <p>Configure your new school instance. This is required for first-time runs.</p>
+                    </div>
+                    
+                    <form id="setup-form">
+                        <div class="setup-step active" data-step="1">
+                            <h3>School Profile Information</h3>
+                            <div class="form-grid">
+                                <div class="form-group">
+                                    <label>School Name</label>
+                                    <input type="text" id="setup-school-name" class="form-control" placeholder="e.g. Orion International School" required>
+                                </div>
+                                <div class="form-group">
+                                    <label>School Motto</label>
+                                    <input type="text" id="setup-school-motto" class="form-control" placeholder="e.g. Knowledge, Integrity, Excellence" required>
+                                </div>
+                                <div class="form-group">
+                                    <label>Phone Number</label>
+                                    <input type="text" id="setup-school-phone" class="form-control" placeholder="e.g. +233 24 123 4567" required>
+                                </div>
+                                <div class="form-group">
+                                    <label>Email Address</label>
+                                    <input type="email" id="setup-school-email" class="form-control" placeholder="e.g. info@orionschool.edu" required>
+                                </div>
+                                <div class="form-group colspan-2">
+                                    <label>Physical Address</label>
+                                    <input type="text" id="setup-school-address" class="form-control" placeholder="e.g. P.O. Box 45, Accra, Ghana" required>
+                                </div>
+                            </div>
+                            <div class="setup-actions">
+                                <button type="button" class="btn btn-secondary" disabled>Back</button>
+                                <button type="button" class="btn btn-primary btn-next">Next <i class="fa-solid fa-arrow-right"></i></button>
+                            </div>
+                        </div>
+                        
+                        <div class="setup-step" data-step="2">
+                            <h3>Super Administrator Account Configuration</h3>
+                            <p class="setup-desc">Create your primary branch system administrator account. You'll use this account to perform initial configuration, register staff, and manage databases.</p>
+                            <div class="form-grid">
+                                <div class="form-group">
+                                    <label>Admin Username</label>
+                                    <input type="text" id="setup-admin-user" class="form-control" placeholder="e.g. admin" required>
+                                </div>
+                                <div class="form-group">
+                                    <label>Admin Password</label>
+                                    <input type="password" id="setup-admin-pass" class="form-control" placeholder="Choose a strong password" required>
+                                </div>
+                            </div>
+                            <div class="setup-actions">
+                                <button type="button" class="btn btn-secondary btn-prev"><i class="fa-solid fa-arrow-left"></i> Back</button>
+                                <button type="button" class="btn btn-primary btn-next">Next <i class="fa-solid fa-arrow-right"></i></button>
+                            </div>
+                        </div>
+                        
+                        <div class="setup-step" data-step="3">
+                            <h3>Academic Period Seeding</h3>
+                            <p class="setup-desc">Initialize the system's first academic year and starting term.</p>
+                            <div class="form-grid">
+                                <div class="form-group">
+                                    <label>Initial Academic Year Name</label>
+                                    <input type="text" id="setup-acad-year" class="form-control" placeholder="e.g. 2026/2027" required>
+                                </div>
+                                <div class="form-group">
+                                    <label>Initial Term Name</label>
+                                    <input type="text" id="setup-term-name" class="form-control" placeholder="e.g. Term 1" required>
+                                </div>
+                            </div>
+                            
+                            <div class="setup-actions">
+                                <button type="button" class="btn btn-secondary btn-prev"><i class="fa-solid fa-arrow-left"></i> Back</button>
+                                <button type="submit" class="btn btn-success" id="btn-setup-finish">
+                                    Initialize & Launch <i class="fa-solid fa-rocket"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                    <div class="setup-progress">
+                        <span class="progress-dot active" data-step="1"></span>
+                        <span class="progress-dot" data-step="2"></span>
+                        <span class="progress-dot" data-step="3"></span>
+                    </div>
+                </div>
+            </div>
+        </section>
+        
+        <!-- ── 3. MAIN WEB APPLICATION LAYOUT ── -->
+        <section id="view-main-layout" class="view-panel">
+            <div class="app-layout">
+                
+                <!-- Sidebar Navigation -->
+                <aside class="app-sidebar glass-panel">
+                    <div class="sidebar-brand">
+                        <i class="fa-solid fa-graduation-cap brand-icon"></i>
+                        <span class="brand-text">ORION SMS</span>
+                    </div>
+                    
+                    <nav class="sidebar-nav">
+                        <ul>
+                            <li><a href="#" class="nav-link active" data-target="panel-dashboard"><i class="fa-solid fa-chart-pie"></i> Dashboard</a></li>
+                            <li><a href="#" class="nav-link" data-target="panel-students"><i class="fa-solid fa-user-graduate"></i> Students</a></li>
+                            <li><a href="#" class="nav-link" data-target="panel-staff"><i class="fa-solid fa-users-gear"></i> Staff Directory</a></li>
+                            <li><a href="#" class="nav-link" data-target="panel-academics"><i class="fa-solid fa-book-bookmark"></i> Academics</a></li>
+                            <li><a href="#" class="nav-link" data-target="panel-attendance"><i class="fa-solid fa-calendar-check"></i> Attendance</a></li>
+                            <li><a href="#" class="nav-link" data-target="panel-exams"><i class="fa-solid fa-file-invoice"></i> Examinations</a></li>
+                            <li><a href="#" class="nav-link" data-target="panel-fees"><i class="fa-solid fa-credit-card"></i> Finance & Fees</a></li>
+                            <li><a href="#" class="nav-link" data-target="panel-library"><i class="fa-solid fa-book-open"></i> Library Books</a></li>
+                            <li><a href="#" class="nav-link" data-target="panel-inventory"><i class="fa-solid fa-cubes"></i> Inventory</a></li>
+                            <li><a href="#" class="nav-link" data-target="panel-communication"><i class="fa-solid fa-message"></i> Communication</a></li>
+                            <li><a href="#" class="nav-link" data-target="panel-settings"><i class="fa-solid fa-sliders"></i> Configurations</a></li>
+                            <li id="sidebar-sysadmin-link" class="sysadmin-only" style="display: none;">
+                                <a href="#" class="nav-link" data-target="panel-sysadmin"><i class="fa-solid fa-shield-halved"></i> System Admin</a>
+                            </li>
+                        </ul>
+                    </nav>
+                </aside>
+                
+                <!-- Main Body Area -->
+                <div class="app-main-content">
+                    
+                    <!-- Header -->
+                    <header class="app-header glass-panel">
+                        <div class="header-search">
+                            <i class="fa-solid fa-magnifying-glass"></i>
+                            <input type="text" id="global-search" placeholder="Type here to search...">
+                        </div>
+                        <div class="header-actions">
+                            <span class="badge badge-branch" id="header-branch-badge"><i class="fa-solid fa-code-branch"></i> Main Campus</span>
+                            <span class="badge badge-academic" id="header-academic-badge"><i class="fa-solid fa-calendar"></i> 2026/2027 - Term 1</span>
+                            
+                            <button class="btn-icon" id="btn-theme-toggle" title="Toggle Light/Dark Theme">
+                                <i class="fa-solid fa-moon"></i>
+                            </button>
+                            
+                            <div class="user-profile-menu">
+                                <div class="profile-info" id="profile-info-trigger">
+                                    <div class="profile-avatar"><i class="fa-solid fa-user-tie"></i></div>
+                                    <div class="profile-text">
+                                        <span class="profile-name" id="user-display-name">Admin User</span>
+                                        <span class="profile-role" id="user-display-role">Super Admin</span>
+                                    </div>
+                                    <i class="fa-solid fa-chevron-down profile-chevron"></i>
+                                </div>
+                                <div class="profile-dropdown shadow-lg" id="profile-dropdown-menu">
+                                    <a href="#" class="dropdown-item"><i class="fa-solid fa-id-badge"></i> Profile</a>
+                                    <a href="#" class="dropdown-item" id="btn-logout"><i class="fa-solid fa-arrow-right-from-bracket"></i> Sign Out</a>
+                                </div>
+                            </div>
+                        </div>
+                    </header>
+                    
+                    <!-- View Container Panels -->
+                    <main class="content-container">
+                        
+                        <!-- PANEL 1: DASHBOARD -->
+                        <div id="panel-dashboard" class="content-panel active">
+                            <div class="dashboard-header">
+                                <h1>Dashboard</h1>
+                                <p>Operational statistics and analytics summary</p>
+                            </div>
+                            
+                            <!-- KPI Metrics Cards Grid -->
+                            <div class="metrics-grid">
+                                <div class="metric-card glass-panel" style="--accent-color: #3b82f6;">
+                                    <div class="metric-icon"><i class="fa-solid fa-user-graduate"></i></div>
+                                    <div class="metric-data">
+                                        <h3 id="stat-students">0</h3>
+                                        <p>Enrolled Students</p>
+                                    </div>
+                                </div>
+                                <div class="metric-card glass-panel" style="--accent-color: #10b981;">
+                                    <div class="metric-icon"><i class="fa-solid fa-chalkboard-user"></i></div>
+                                    <div class="metric-data">
+                                        <h3 id="stat-staff">0</h3>
+                                        <p>Active Staff</p>
+                                    </div>
+                                </div>
+                                <div class="metric-card glass-panel" style="--accent-color: #f59e0b;">
+                                    <div class="metric-icon"><i class="fa-solid fa-book-open"></i></div>
+                                    <div class="metric-data">
+                                        <h3 id="stat-books">0</h3>
+                                        <p>Library Books</p>
+                                    </div>
+                                </div>
+                                <div class="metric-card glass-panel" style="--accent-color: #8b5cf6;">
+                                    <div class="metric-icon"><i class="fa-solid fa-wallet"></i></div>
+                                    <div class="metric-data">
+                                        <h3><span id="stat-fees">0.00</span> <span class="currency-label">GHS</span></h3>
+                                        <p>Fees Collected</p>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Grid details -->
+                            <div class="dashboard-details-grid">
+                                <div class="dashboard-card glass-panel col-span-2">
+                                    <div class="card-header">
+                                        <h3>Enrollment Distribution</h3>
+                                        <p>Active student headcount by class stream</p>
+                                    </div>
+                                    <div class="card-body chart-body">
+                                        <canvas id="chart-enrollment" height="280"></canvas>
+                                    </div>
+                                </div>
+                                
+                                <div class="dashboard-card glass-panel" id="dashboard-attendance-card">
+                                    <div class="card-header">
+                                        <h3>Attendance Overview</h3>
+                                        <p>Overall student attendance distribution</p>
+                                    </div>
+                                    <div class="card-body chart-body">
+                                        <canvas id="chart-attendance" height="280"></canvas>
+                                    </div>
+                                </div>
+
+                                <div class="dashboard-card glass-panel col-span-2" id="dashboard-billing-card">
+                                    <div class="card-header">
+                                        <h3>Billing & Collection Summary</h3>
+                                        <p>Total bills issued vs collections</p>
+                                    </div>
+                                    <div class="card-body chart-body">
+                                        <canvas id="chart-billing" height="280"></canvas>
+                                    </div>
+                                </div>
+                                
+                                <div class="dashboard-card glass-panel" id="dashboard-activity-card">
+                                    <div class="card-header">
+                                        <h3>Recent Activities</h3>
+                                        <p>Latest audit logs recorded in the branch</p>
+                                    </div>
+                                    <div class="card-body scrollable-y max-h-350">
+                                        <ul class="activity-timeline" id="dashboard-activity-log">
+                                            <li>Loading log data...</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- PANEL 2: STUDENTS -->
+                        <div id="panel-students" class="content-panel">
+                            <div class="panel-header-with-actions">
+                                <div>
+                                    <h1>Students Management</h1>
+                                    <p>Browse directories, manage enrollment, and trigger bulk promotions</p>
+                                </div>
+                                <div class="header-actions-row">
+                                    <button class="btn btn-primary" id="btn-admit-student-trigger"><i class="fa-solid fa-user-plus"></i> Admit Student</button>
+                                    <button class="btn btn-secondary" id="btn-bulk-admit-trigger"><i class="fa-solid fa-file-import"></i> Bulk Upload</button>
+                                </div>
+                            </div>
+                            
+                            <div class="tab-container glass-panel">
+                                <div class="tab-header">
+                                    <button class="tab-btn active" data-tab="tab-student-dir">Student Directory</button>
+                                    <button class="tab-btn" data-tab="tab-student-promo">Bulk Promotions & Status</button>
+                                </div>
+                                
+                                <div class="tab-content active" id="tab-student-dir">
+                                    <div class="filter-bar">
+                                        <div class="filter-group stretch">
+                                            <input type="text" id="search-student-input" class="form-control" placeholder="Search by name or student ID...">
+                                        </div>
+                                        <div class="filter-group">
+                                            <select id="filter-student-class" class="form-control">
+                                                <option value="">All Classes</option>
+                                            </select>
+                                        </div>
+                                        <div class="filter-group">
+                                            <select id="filter-student-status" class="form-control">
+                                                <option value="Active">Active</option>
+                                                <option value="Promoted">Promoted</option>
+                                                <option value="Transferred">Transferred</option>
+                                                <option value="Withdrawn">Withdrawn</option>
+                                                <option value="Alumnus">Alumnus</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    
+                                    <table class="table" id="students-table">
+                                        <thead>
+                                            <tr>
+                                                <th>ID</th>
+                                                <th>Name</th>
+                                                <th>Class</th>
+                                                <th>Parent Contact</th>
+                                                <th>Status</th>
+                                                <th>Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr><td colspan="6" class="text-center">Loading student list...</td></tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                                
+                                <div class="tab-content" id="tab-student-promo">
+                                    <div class="promo-bar">
+                                        <div class="filter-group">
+                                            <label>Source Class</label>
+                                            <select id="promo-src-class" class="form-control">
+                                                <option value="">Select source class...</option>
+                                            </select>
+                                        </div>
+                                        <div class="filter-group">
+                                            <label>Target Action / Class</label>
+                                            <select id="promo-target-class" class="form-control">
+                                                <option value="">Select target class...</option>
+                                            </select>
+                                        </div>
+                                        <div class="filter-group end">
+                                            <button class="btn btn-success" id="btn-execute-promo">Execute Promotion</button>
+                                            <button class="btn btn-warning" id="btn-execute-withdraw">Bulk Withdraw</button>
+                                        </div>
+                                    </div>
+                                    
+                                    <table class="table" id="promo-students-table">
+                                        <thead>
+                                            <tr>
+                                                <th width="40"><input type="checkbox" id="promo-select-all"></th>
+                                                <th>Student ID</th>
+                                                <th>Student Name</th>
+                                                <th>Current Class</th>
+                                                <th>Status</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr><td colspan="5" class="text-center">Select a source class to load students.</td></tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- PANEL 3: STAFF -->
+                        <div id="panel-staff" class="content-panel">
+                            <div class="panel-header-with-actions">
+                                <div>
+                                    <h1>Staff Directory</h1>
+                                    <p>Manage staff accounts, base payroll structures, and portal logins</p>
+                                </div>
+                                <div class="header-actions-row">
+                                    <button class="btn btn-primary" id="btn-register-staff-trigger"><i class="fa-solid fa-user-plus"></i> Register Staff</button>
+                                    <button class="btn btn-secondary" id="btn-bulk-staff-trigger"><i class="fa-solid fa-file-import"></i> Bulk Upload</button>
+                                </div>
+                            </div>
+                            
+                            <div class="glass-panel p-20 mt-15">
+                                <table class="table" id="staff-table">
+                                    <thead>
+                                        <tr>
+                                            <th>ID</th>
+                                            <th>Full Name</th>
+                                            <th>Role</th>
+                                            <th>Email</th>
+                                            <th>Phone</th>
+                                            <th>Base Salary</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr><td colspan="7" class="text-center">Loading staff records...</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        
+                        <!-- PANEL 4: ACADEMICS -->
+                        <div id="panel-academics" class="content-panel">
+                            <div class="dashboard-header">
+                                <h1>Academic Configurations</h1>
+                                <p>Manage class lists, subjects, academic years, terms, and assignments</p>
+                            </div>
+                            
+                            <div class="tab-container glass-panel mt-20">
+                                <div class="tab-header">
+                                    <button class="tab-btn active" data-tab="tab-acad-calendar">Academic Years & Terms</button>
+                                    <button class="tab-btn" data-tab="tab-acad-classes">Classes & Streams</button>
+                                    <button class="tab-btn" data-tab="tab-acad-subjects">Subjects</button>
+                                    <button class="tab-btn" data-tab="tab-acad-assigns">Teacher Assignments</button>
+                                </div>
+                                
+                                <div class="tab-content active" id="tab-acad-calendar">
+                                    <div class="academic-calendar-grid">
+                                        <div class="card-column">
+                                            <h3>Academic Years</h3>
+                                            <form id="form-add-year" class="inline-form">
+                                                <input type="text" id="acad-year-name" placeholder="e.g. 2026/2027" class="form-control" required>
+                                                <input type="date" id="acad-year-start" class="form-control" required>
+                                                <input type="date" id="acad-year-end" class="form-control" required>
+                                                <button type="submit" class="btn btn-primary">Add</button>
+                                            </form>
+                                            <ul class="simple-list mt-15" id="list-academic-years">
+                                                <li>Loading academic years...</li>
+                                            </ul>
+                                        </div>
+                                        <div class="card-column">
+                                            <h3>Terms / Semesters</h3>
+                                            <form id="form-add-term" class="inline-form">
+                                                <select id="acad-term-year-select" class="form-control" required>
+                                                    <option value="">Select year...</option>
+                                                </select>
+                                                <input type="text" id="acad-term-name" placeholder="e.g. Term 1" class="form-control" required>
+                                                <input type="date" id="acad-term-start" class="form-control" required>
+                                                <input type="date" id="acad-term-end" class="form-control" required>
+                                                <button type="submit" class="btn btn-primary">Add</button>
+                                            </form>
+                                            <ul class="simple-list mt-15" id="list-academic-terms">
+                                                <li>Loading terms...</li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="tab-content" id="tab-acad-classes">
+                                    <div class="form-sidebar-layout">
+                                        <div class="sidebar-form">
+                                            <h3>Add Class</h3>
+                                            <form id="form-add-class">
+                                                <div class="form-group">
+                                                    <label>Class Name</label>
+                                                    <input type="text" id="class-name-input" class="form-control" placeholder="e.g. Primary 1, JHS 1" required>
+                                                </div>
+                                                <div class="form-group">
+                                                    <label>Academic Level</label>
+                                                    <select id="class-level-select" class="form-control" required>
+                                                        <option value="Kindergarten">Kindergarten</option>
+                                                        <option value="Primary">Primary</option>
+                                                        <option value="JHS">JHS (Junior High)</option>
+                                                        <option value="SHS">SHS (Senior High)</option>
+                                                    </select>
+                                                </div>
+                                                <div class="form-group">
+                                                    <label>Stream / Division</label>
+                                                    <input type="text" id="class-stream-input" class="form-control" placeholder="e.g. A, B, Gold">
+                                                </div>
+                                                <button type="submit" class="btn btn-primary btn-block">Create Class</button>
+                                            </form>
+                                        </div>
+                                        <div class="main-display">
+                                            <h3>Registered Class List</h3>
+                                            <table class="table mt-15" id="classes-list-table">
+                                                <thead>
+                                                    <tr>
+                                                        <th>ID</th>
+                                                        <th>Class Name</th>
+                                                        <th>Level</th>
+                                                        <th>Stream</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    <tr><td colspan="4">Loading classes...</td></tr>
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="tab-content" id="tab-acad-subjects">
+                                    <div class="form-sidebar-layout">
+                                        <div class="sidebar-form">
+                                            <h3>Add Course / Subject</h3>
+                                            <form id="form-add-subject">
+                                                <div class="form-group">
+                                                    <label>Subject Name</label>
+                                                    <input type="text" id="subject-name-input" class="form-control" placeholder="e.g. Mathematics" required>
+                                                </div>
+                                                <div class="form-group">
+                                                    <label>Subject Code</label>
+                                                    <input type="text" id="subject-code-input" class="form-control" placeholder="e.g. MATH101" required>
+                                                </div>
+                                                <div class="form-group">
+                                                    <label>Category</label>
+                                                    <select id="subject-category-select" class="form-control" required>
+                                                        <option value="Core">Core Subject</option>
+                                                        <option value="Elective">Elective Subject</option>
+                                                    </select>
+                                                </div>
+                                                <button type="submit" class="btn btn-primary btn-block">Create Subject</button>
+                                            </form>
+                                        </div>
+                                        <div class="main-display">
+                                            <h3>Subject Catalogue</h3>
+                                            <table class="table mt-15" id="subjects-list-table">
+                                                <thead>
+                                                    <tr>
+                                                        <th>ID</th>
+                                                        <th>Subject Name</th>
+                                                        <th>Code</th>
+                                                        <th>Category</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    <tr><td colspan="4">Loading subjects...</td></tr>
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="tab-content" id="tab-acad-assigns">
+                                    <div class="form-sidebar-layout">
+                                        <div class="sidebar-form">
+                                            <h3>Assign Teacher</h3>
+                                            <form id="form-add-assignment">
+                                                <div class="form-group">
+                                                    <label>Select Teacher</label>
+                                                    <select id="assign-teacher-select" class="form-control" required></select>
+                                                </div>
+                                                <div class="form-group">
+                                                    <label>Select Class</label>
+                                                    <select id="assign-class-select" class="form-control" required></select>
+                                                </div>
+                                                <div class="form-group">
+                                                    <label>Select Subject</label>
+                                                    <select id="assign-subject-select" class="form-control" required></select>
+                                                </div>
+                                                <button type="submit" class="btn btn-primary btn-block">Save Assignment</button>
+                                            </form>
+                                        </div>
+                                        <div class="main-display">
+                                            <h3>Academic Assignments</h3>
+                                            <table class="table mt-15" id="assignments-list-table">
+                                                <thead>
+                                                    <tr>
+                                                        <th>Class</th>
+                                                        <th>Subject</th>
+                                                        <th>Assigned Teacher</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    <tr><td colspan="3">Loading assignments...</td></tr>
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- PANEL 5: ATTENDANCE -->
+                        <div id="panel-attendance" class="content-panel">
+                            <div class="dashboard-header">
+                                <h1>Student & Staff Attendance Tracker</h1>
+                                <p>Take student and staff register roll-call and generate attendance reports</p>
+                            </div>
+                            
+                            <div class="tab-container glass-panel mt-20">
+                                <div class="tab-header">
+                                    <button class="tab-btn active" data-tab="tab-take-student-att">Take Student Attendance</button>
+                                    <button class="tab-btn" data-tab="tab-take-staff-att" id="tab-btn-staff-att">Take Staff Attendance</button>
+                                    <button class="tab-btn" data-tab="tab-attendance-report">Attendance Reports</button>
+                                </div>
+                                
+                                <!-- Tab 1: Take Student Attendance -->
+                                <div class="tab-content active" id="tab-take-student-att">
+                                    <div class="filter-bar">
+                                        <div class="filter-group">
+                                            <label>Select Class</label>
+                                            <select id="att-class-select" class="form-control">
+                                                <option value="">Select Class...</option>
+                                            </select>
+                                        </div>
+                                        <div class="filter-group">
+                                            <label>Select Date</label>
+                                            <input type="date" id="att-date-input" class="form-control">
+                                        </div>
+                                        <div class="filter-group end">
+                                            <button class="btn btn-primary" id="btn-load-attendance">Fetch Sheet</button>
+                                        </div>
+                                    </div>
+                                    
+                                    <form id="attendance-sheet-form" style="display: none;" class="mt-20">
+                                        <table class="table" id="attendance-table">
+                                            <thead>
+                                                <tr>
+                                                    <th>Student ID</th>
+                                                    <th>Student Name</th>
+                                                    <th>Attendance Status</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody></tbody>
+                                        </table>
+                                        <div class="form-actions mt-15">
+                                            <button type="submit" class="btn btn-success"><i class="fa-solid fa-floppy-disk"></i> Submit Roll-call Sheet</button>
+                                        </div>
+                                    </form>
+                                </div>
+                                
+                                <!-- Tab 2: Take Staff Attendance -->
+                                <div class="tab-content" id="tab-take-staff-att">
+                                    <div class="filter-bar">
+                                        <div class="filter-group">
+                                            <label>Select Date</label>
+                                            <input type="date" id="staff-att-date-input" class="form-control">
+                                        </div>
+                                        <div class="filter-group end">
+                                            <button class="btn btn-primary" id="btn-load-staff-attendance">Fetch Staff Sheet</button>
+                                        </div>
+                                    </div>
+                                    
+                                    <form id="staff-attendance-sheet-form" style="display: none;" class="mt-20">
+                                        <table class="table" id="staff-attendance-table">
+                                            <thead>
+                                                <tr>
+                                                    <th>Staff ID</th>
+                                                    <th>Staff Name</th>
+                                                    <th>Role</th>
+                                                    <th>Attendance Status</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody></tbody>
+                                        </table>
+                                        <div class="form-actions mt-15">
+                                            <button type="submit" class="btn btn-success"><i class="fa-solid fa-floppy-disk"></i> Submit Staff Roll-call Sheet</button>
+                                        </div>
+                                    </form>
+                                </div>
+                                
+                                <!-- Tab 3: Attendance Reports -->
+                                <div class="tab-content" id="tab-attendance-report">
+                                    <div class="filter-bar">
+                                        <div class="filter-group">
+                                            <label>Select Class</label>
+                                            <select id="rep-att-class-select" class="form-control">
+                                                <option value="">Select Class...</option>
+                                            </select>
+                                        </div>
+                                        <div class="filter-group">
+                                            <label>Start Date</label>
+                                            <input type="date" id="rep-att-start-date" class="form-control">
+                                        </div>
+                                        <div class="filter-group">
+                                            <label>End Date</label>
+                                            <input type="date" id="rep-att-end-date" class="form-control">
+                                        </div>
+                                        <div class="filter-group end" style="flex-direction: row; gap: 10px;">
+                                            <button class="btn btn-primary" id="btn-load-attendance-report">Generate Report</button>
+                                            <button class="btn btn-secondary" id="btn-export-attendance-pdf"><i class="fa-solid fa-file-pdf"></i> Export PDF</button>
+                                        </div>
+                                    </div>
+                                    
+                                    <div id="attendance-report-container" style="display: none;" class="mt-20">
+                                        <table class="table" id="attendance-report-table">
+                                            <thead>
+                                                <tr>
+                                                    <th>Student ID</th>
+                                                    <th>Student Name</th>
+                                                    <th>Present Days</th>
+                                                    <th>Absent Days</th>
+                                                    <th>Late Days</th>
+                                                    <th>Total Days</th>
+                                                    <th>Attendance %</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody></tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- PANEL 6: EXAMS -->
+                        <div id="panel-exams" class="content-panel">
+                            <div class="panel-header-with-actions">
+                                <div>
+                                    <h1>Examinations Portal</h1>
+                                    <p>Manage exam periods, record grading structures, input marks, and print report cards</p>
+                                </div>
+                                <div class="header-actions-row">
+                                    <button class="btn btn-primary" id="btn-add-exam-trigger"><i class="fa-solid fa-plus"></i> New Exam Setup</button>
+                                </div>
+                            </div>
+                            
+                            <div class="tab-container glass-panel mt-15">
+                                <div class="tab-header">
+                                    <button class="tab-btn active" data-tab="tab-exam-list">Exam Configurations</button>
+                                    <button class="tab-btn" data-tab="tab-exam-results">Record Student Scores</button>
+                                    <button class="tab-btn" data-tab="tab-exam-grades">Grading Scales</button>
+                                </div>
+                                
+                                <div class="tab-content active" id="tab-exam-list">
+                                    <table class="table" id="exams-list-table">
+                                        <thead>
+                                            <tr>
+                                                <th>ID</th>
+                                                <th>Exam Title</th>
+                                                <th>Term Period</th>
+                                                <th>Active Status</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr><td colspan="4">Loading exams...</td></tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                                
+                                <div class="tab-content" id="tab-exam-results">
+                                    <div class="filter-bar">
+                                        <div class="filter-group">
+                                            <label>Select Exam</label>
+                                            <select id="results-exam-select" class="form-control"></select>
+                                        </div>
+                                        <div class="filter-group">
+                                            <label>Select Class</label>
+                                            <select id="results-class-select" class="form-control"></select>
+                                        </div>
+                                        <div class="filter-group">
+                                            <label>Select Subject</label>
+                                            <select id="results-subject-select" class="form-control"></select>
+                                        </div>
+                                        <div class="filter-group end">
+                                            <button class="btn btn-primary" id="btn-load-results">Fetch Scoresheet</button>
+                                            <button class="btn btn-secondary" id="btn-print-summary-pdf" title="Generate Class Summary PDF" disabled>
+                                                <i class="fa-solid fa-file-pdf"></i> Print Summary
+                                            </button>
+                                        </div>
+                                    </div>
+                                    
+                                    <form id="results-sheet-form" style="display: none;" class="mt-20">
+                                        <table class="table" id="results-table">
+                                            <thead>
+                                                <tr>
+                                                    <th>Student ID</th>
+                                                    <th>Student Name</th>
+                                                    <th>Class Score (30%)</th>
+                                                    <th>Exam Score (70%)</th>
+                                                    <th>Teacher Remarks</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody></tbody>
+                                        </table>
+                                        <div class="form-actions mt-15">
+                                            <button type="submit" class="btn btn-success"><i class="fa-solid fa-floppy-disk"></i> Save Scoresheet</button>
+                                        </div>
+                                    </form>
+                                </div>
+                                
+                                <div class="tab-content" id="tab-exam-grades">
+                                    <h3>Grading Scale Rules (GES Standard)</h3>
+                                    <p class="desc">Define the minimum marks required for each letter grade remark</p>
+                                    <form id="form-grades-scale" class="mt-15">
+                                        <div id="grades-wrapper"></div>
+                                        <button type="submit" class="btn btn-success mt-15"><i class="fa-solid fa-floppy-disk"></i> Update Scale Changes</button>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- PANEL 7: FEES -->
+                        <div id="panel-fees" class="content-panel">
+                            <div class="panel-header-with-actions">
+                                <div>
+                                    <h1>Fees & Financial Ledger</h1>
+                                    <p>Billing structures setup, fee collections, payment listings, and outstanding balances</p>
+                                </div>
+                                <div class="header-actions-row">
+                                    <button class="btn btn-secondary" id="btn-bill-class-trigger"><i class="fa-solid fa-file-invoice-dollar"></i> Bill Class</button>
+                                    <button class="btn btn-primary" id="btn-record-payment-trigger"><i class="fa-solid fa-receipt"></i> Receive Fee Payment</button>
+                                </div>
+                            </div>
+                            
+                            <div class="tab-container glass-panel mt-15">
+                                <div class="tab-header">
+                                    <button class="tab-btn active" data-tab="tab-fees-bills">Billed Student Status</button>
+                                    <button class="tab-btn" data-tab="tab-fees-payments">Payment Records</button>
+                                    <button class="tab-btn" data-tab="tab-fees-balances">Outstanding Balances</button>
+                                </div>
+                                
+                                <div class="tab-content active" id="tab-fees-bills">
+                                    <table class="table" id="fees-bills-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Student ID</th>
+                                                <th>Student Name</th>
+                                                <th>Term Period</th>
+                                                <th>Billed Amt</th>
+                                                <th>Paid Amt</th>
+                                                <th>Balance</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr><td colspan="6">Loading ledger...</td></tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                                
+                                <div class="tab-content" id="tab-fees-payments">
+                                    <table class="table" id="fees-payments-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Receipt ID</th>
+                                                <th>Student ID</th>
+                                                <th>Student Name</th>
+                                                <th>Amount Paid</th>
+                                                <th>Mode</th>
+                                                <th>Ref/Check No.</th>
+                                                <th>Date Time</th>
+                                                <th>Receipt</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr><td colspan="8">Loading payments logs...</td></tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                                
+                                <div class="tab-content" id="tab-fees-balances">
+                                    <table class="table" id="fees-balances-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Student ID</th>
+                                                <th>Student Name</th>
+                                                <th>Class</th>
+                                                <th>Total Billed</th>
+                                                <th>Total Paid</th>
+                                                <th>Fee Balance</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr><td colspan="6">Loading balances...</td></tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- PANEL 8: LIBRARY -->
+                        <div id="panel-library" class="content-panel">
+                            <div class="panel-header-with-actions">
+                                <div>
+                                    <h1>Library Registry</h1>
+                                    <p>Catalog book databases, issue books, and manage return logs</p>
+                                </div>
+                                <div class="header-actions-row">
+                                    <button class="btn btn-secondary" id="btn-issue-book-trigger"><i class="fa-solid fa-hand-holding-hand"></i> Issue Book</button>
+                                    <button class="btn btn-primary" id="btn-add-book-trigger"><i class="fa-solid fa-plus"></i> Add Book Registry</button>
+                                </div>
+                            </div>
+                            
+                            <div class="tab-container glass-panel mt-15">
+                                <div class="tab-header">
+                                    <button class="tab-btn active" data-tab="tab-lib-books">Book Catalogue</button>
+                                    <button class="tab-btn" data-tab="tab-lib-logs">Issued Books History</button>
+                                </div>
+                                
+                                <div class="tab-content active" id="tab-lib-books">
+                                    <table class="table" id="lib-books-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Book ID</th>
+                                                <th>Title</th>
+                                                <th>Author</th>
+                                                <th>ISBN</th>
+                                                <th>Shelf Shelf</th>
+                                                <th>Total Copies</th>
+                                                <th>Available</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr><td colspan="7">Loading catalog...</td></tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                                
+                                <div class="tab-content" id="tab-lib-logs">
+                                    <table class="table" id="lib-logs-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Log ID</th>
+                                                <th>Book Title</th>
+                                                <th>Borrowing Student</th>
+                                                <th>Issue Date</th>
+                                                <th>Due Date</th>
+                                                <th>Return Date</th>
+                                                <th>Status</th>
+                                                <th>Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr><td colspan="8">Loading logs...</td></tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- PANEL 9: INVENTORY -->
+                        <div id="panel-inventory" class="content-panel">
+                            <div class="panel-header-with-actions">
+                                <div>
+                                    <h1>School Assets & Supplies</h1>
+                                    <p>Manage items, categories, physical health states, and logs</p>
+                                </div>
+                                <div class="header-actions-row">
+                                    <button class="btn btn-primary" id="btn-add-inventory-trigger"><i class="fa-solid fa-plus"></i> Add Inventory Item</button>
+                                </div>
+                            </div>
+                            
+                            <div class="glass-panel p-20 mt-15">
+                                <table class="table" id="inventory-table">
+                                    <thead>
+                                        <tr>
+                                            <th>ID</th>
+                                            <th>Item Name</th>
+                                            <th>Category</th>
+                                            <th>Total Stock Qty</th>
+                                            <th>Condition</th>
+                                            <th>Unit Value</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr><td colspan="6">Loading inventory...</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        
+                        <!-- PANEL 10: COMMUNICATION -->
+                        <div id="panel-communication" class="content-panel">
+                            <div class="dashboard-header">
+                                <h1>Communication logs & Announcement Board</h1>
+                                <p>Manage school announcements and dispatch simulated SMS alerts</p>
+                            </div>
+                            
+                            <div class="tab-container glass-panel mt-20">
+                                <div class="tab-header">
+                                    <button class="tab-btn active" data-tab="tab-announcements">School Announcements</button>
+                                    <button class="tab-btn" data-tab="tab-sms-sender">Simulated SMS Dispatcher</button>
+                                </div>
+                                
+                                <div class="tab-content active" id="tab-announcements">
+                                    <div class="form-sidebar-layout">
+                                        <div class="sidebar-form">
+                                            <h3>Post Announcement</h3>
+                                            <form id="form-add-announcement">
+                                                <div class="form-group">
+                                                    <label>Notice Title</label>
+                                                    <input type="text" id="ann-title-input" class="form-control" placeholder="Announcement subject heading" required>
+                                                </div>
+                                                <div class="form-group">
+                                                    <label>Target Audience</label>
+                                                    <select id="ann-audience-select" class="form-control">
+                                                        <option value="All">All Parents & Staff</option>
+                                                        <option value="Staff">Staff Only</option>
+                                                        <option value="Parents">Parents Only</option>
+                                                    </select>
+                                                </div>
+                                                <div class="form-group">
+                                                    <label>Content Description</label>
+                                                    <textarea id="ann-content-input" class="form-control" rows="5" placeholder="Details of Notice message..." required></textarea>
+                                                </div>
+                                                <button type="submit" class="btn btn-primary btn-block">Broadcast Announcement</button>
+                                            </form>
+                                        </div>
+                                        <div class="main-display">
+                                            <h3>Active Notice Board</h3>
+                                            <div class="announcements-timeline" id="list-announcements">
+                                                <p>Loading Notice timeline...</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="tab-content" id="tab-sms-sender">
+                                    <div class="form-sidebar-layout">
+                                        <div class="sidebar-form">
+                                            <h3>SMS dispatch panel</h3>
+                                            <form id="form-send-sms">
+                                                <div class="form-group">
+                                                    <label>Recipient Phone Number</label>
+                                                    <input type="text" id="sms-phone-input" class="form-control" placeholder="e.g. +233241234567" required>
+                                                </div>
+                                                <div class="form-group">
+                                                    <label>Message Content</label>
+                                                    <textarea id="sms-message-input" class="form-control" rows="6" maxlength="160" placeholder="Type SMS content here..." required></textarea>
+                                                    <small class="character-count" id="sms-chars-hint">0 / 160 characters</small>
+                                                </div>
+                                                <button type="submit" class="btn btn-success btn-block"><i class="fa-solid fa-paper-plane"></i> Send SMS</button>
+                                            </form>
+                                            
+                                            <div class="mt-20 pt-20" style="border-top: 1px solid var(--border-glass);">
+                                                <h3>Bulk Broadcaster Alerts</h3>
+                                                <p style="font-size: 11px; color: var(--text-secondary); margin-bottom: 12px;">Dispatch automated branch-wide SMS notifications to parents.</p>
+                                                
+                                                <div class="form-group">
+                                                    <label>Select Target Class (Optional)</label>
+                                                    <select id="sms-broadcast-class" class="form-control">
+                                                        <option value="">All Classes (School-wide)</option>
+                                                    </select>
+                                                </div>
+
+                                                <div style="display: flex; flex-direction: column; gap: 10px;">
+                                                    <button type="button" class="btn btn-primary" id="btn-broadcast-fees">
+                                                        <i class="fa-solid fa-bell"></i> Dispatch Fee Reminders
+                                                    </button>
+                                                    <button type="button" class="btn btn-secondary" id="btn-broadcast-reports">
+                                                        <i class="fa-solid fa-file-invoice"></i> Dispatch Report Summaries
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="main-display">
+                                            <h3>SMS Dispatch History Logs</h3>
+                                            <table class="table" id="sms-logs-table">
+                                                <thead>
+                                                    <tr>
+                                                        <th>Timestamp</th>
+                                                        <th>Recipient Phone</th>
+                                                        <th>Message Content</th>
+                                                        <th>Status</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    <tr><td colspan="4">Loading log registry...</td></tr>
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- PANEL 11: CONFIGURATIONS / SETTINGS -->
+                        <div id="panel-settings" class="content-panel">
+                            <div class="dashboard-header">
+                                <h1>System configurations</h1>
+                                <p>General Profile parameters, auto-backups, and resets</p>
+                            </div>
+                            
+                            <div class="tab-container glass-panel mt-20">
+                                <div class="tab-header">
+                                    <button class="tab-btn active" data-tab="tab-settings-profile">School Profile Info</button>
+                                    <button class="tab-btn" data-tab="tab-settings-backups">Data Backups</button>
+                                </div>
+                                
+                                <div class="tab-content active" id="tab-settings-profile">
+                                    <form id="form-settings-profile">
+                                        <div class="form-grid">
+                                            <div class="form-group">
+                                                <label>School Name</label>
+                                                <input type="text" id="set-school-name" class="form-control">
+                                            </div>
+                                            <div class="form-group">
+                                                <label>School Motto</label>
+                                                <input type="text" id="set-school-motto" class="form-control">
+                                            </div>
+                                            <div class="form-group">
+                                                <label>School Phone</label>
+                                                <input type="text" id="set-school-phone" class="form-control">
+                                            </div>
+                                            <div class="form-group">
+                                                <label>School Email</label>
+                                                <input type="email" id="set-school-email" class="form-control">
+                                            </div>
+                                            <div class="form-group colspan-2">
+                                                <label>Physical Address</label>
+                                                <input type="text" id="set-school-address" class="form-control">
+                                            </div>
+                                        </div>
+                                        <button type="submit" class="btn btn-success mt-15"><i class="fa-solid fa-floppy-disk"></i> Save Profiles Details</button>
+                                    </form>
+                                </div>
+                                
+                                <div class="tab-content" id="tab-settings-backups">
+                                    <div class="backup-actions">
+                                        <h3>System Database Backups</h3>
+                                        <button class="btn btn-primary" id="btn-trigger-backup-now"><i class="fa-solid fa-file-zipper"></i> Run Instant Backup Now</button>
+                                    </div>
+                                    <table class="table mt-15" id="backups-table">
+                                        <thead>
+                                            <tr>
+                                                <th>File Name</th>
+                                                <th>Created Size</th>
+                                                <th>Backup Time</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr><td colspan="3">Loading registry logs...</td></tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- PANEL 12: SYSTEM ADMIN PORTAL -->
+                        <div id="panel-sysadmin" class="content-panel">
+                            <div class="panel-header-with-actions">
+                                <div>
+                                    <h1>System Admin Portal</h1>
+                                    <p>Global multischool branch routing directory and admin creations</p>
+                                </div>
+                                <div class="header-actions-row">
+                                    <button class="btn btn-primary" id="btn-add-branch-trigger"><i class="fa-solid fa-plus"></i> Register School Branch</button>
+                                    <button class="btn btn-secondary" id="btn-add-sysadmin-trigger"><i class="fa-solid fa-user-shield"></i> Create System Admin</button>
+                                </div>
+                            </div>
+                            
+                            <div class="tab-container glass-panel mt-15">
+                                <div class="tab-header">
+                                    <button class="tab-btn active" data-tab="tab-sys-branches">Active School Branches</button>
+                                    <button class="tab-btn" data-tab="tab-sys-admins">System Admin Accounts</button>
+                                </div>
+                                
+                                <div class="tab-content active" id="tab-sys-branches">
+                                    <table class="table" id="sys-branches-table">
+                                        <thead>
+                                            <tr>
+                                                <th>ID</th>
+                                                <th>Branch Name</th>
+                                                <th>Branch Code</th>
+                                                <th>Active Status</th>
+                                                <th>Enrolled Students</th>
+                                                <th>Staff Count</th>
+                                                <th>Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr><td colspan="7">Loading registered branches...</td></tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                                
+                                <div class="tab-content" id="tab-sys-admins">
+                                    <table class="table" id="sys-admins-table">
+                                        <thead>
+                                            <tr>
+                                                <th>ID</th>
+                                                <th>Username</th>
+                                                <th>Full Name</th>
+                                                <th>Email</th>
+                                                <th>Status</th>
+                                                <th>Created Date</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr><td colspan="6">Loading sysadmin list...</td></tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                        
+                    </main>
+                </div>
+            </div>
+        </section>
+    </div>
+    
+    <!-- ── 4. MODALS & DIALOGS ── -->
+    
+    <!-- Modal: Admit Student -->
+    <div class="modal" id="modal-admit-student">
+        <div class="modal-dialog glass-panel">
+            <div class="modal-header">
+                <h2>Admit Student Form</h2>
+                <button class="modal-close">&times;</button>
+            </div>
+            <form id="form-admit-student">
+                <div class="modal-body">
+                    <h3>Student Personal Details</h3>
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label>First Name</label>
+                            <input type="text" id="stud-fname" class="form-control" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Last Name</label>
+                            <input type="text" id="stud-lname" class="form-control" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Other Names</label>
+                            <input type="text" id="stud-onames" class="form-control">
+                        </div>
+                        <div class="form-group">
+                            <label>Gender</label>
+                            <select id="stud-gender" class="form-control" required>
+                                <option value="Male">Male</option>
+                                <option value="Female">Female</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Date of Birth</label>
+                            <input type="date" id="stud-dob" class="form-control" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Admit Class</label>
+                            <select id="stud-class" class="form-control" required></select>
+                        </div>
+                    </div>
+                    
+                    <h3 class="mt-15">Parental Information Details</h3>
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label>First Name</label>
+                            <input type="text" id="parent-fname" class="form-control" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Last Name</label>
+                            <input type="text" id="parent-lname" class="form-control" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Phone Contact</label>
+                            <input type="text" id="parent-phone" class="form-control" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Email Address</label>
+                            <input type="email" id="parent-email" class="form-control">
+                        </div>
+                        <div class="form-group">
+                            <label>Occupation</label>
+                            <input type="text" id="parent-occ" class="form-control">
+                        </div>
+                        <div class="form-group">
+                            <label>Postal/Residential Address</label>
+                            <input type="text" id="parent-addr" class="form-control">
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary btn-modal-cancel">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Enroll Student</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Modal: Register Staff -->
+    <div class="modal" id="modal-register-staff">
+        <div class="modal-dialog glass-panel">
+            <div class="modal-header">
+                <h2>Register New Staff</h2>
+                <button class="modal-close">&times;</button>
+            </div>
+            <form id="form-register-staff">
+                <div class="modal-body">
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label>First Name</label>
+                            <input type="text" id="staff-fname" class="form-control" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Last Name</label>
+                            <input type="text" id="staff-lname" class="form-control" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Portal Username</label>
+                            <input type="text" id="staff-username" class="form-control" required>
+                        </div>
+                        <div class="form-group">
+                            <label>System Access Role</label>
+                            <select id="staff-role" class="form-control" required>
+                                <option value="Teacher">Teacher</option>
+                                <option value="Accountant">Accountant</option>
+                                <option value="Librarian">Librarian</option>
+                                <option value="Storekeeper">Storekeeper</option>
+                                <option value="Admin/Headteacher">Admin/Headteacher</option>
+                                <option value="Super Admin">Super Admin</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Email Address</label>
+                            <input type="email" id="staff-email" class="form-control" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Phone Number</label>
+                            <input type="text" id="staff-phone" class="form-control" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Qualification Credentials</label>
+                            <input type="text" id="staff-qual" class="form-control" placeholder="e.g. B.Ed Mathematics">
+                        </div>
+                        <div class="form-group">
+                            <label>Base Salary (GHS)</label>
+                            <input type="number" step="0.01" id="staff-salary" class="form-control" value="0.00">
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary btn-modal-cancel">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Create Profile</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Modal: Bulk Student Upload -->
+    <div class="modal" id="modal-bulk-admit-student">
+        <div class="modal-dialog glass-panel">
+            <div class="modal-header">
+                <h2>Bulk Admit Students</h2>
+                <button class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="template-bar">
+                    <span>Need the template? Click here to download.</span>
+                    <button class="btn btn-secondary btn-link" id="btn-download-student-template" style="font-size: 13px;"><i class="fa-solid fa-download"></i> Template (CSV)</button>
+                </div>
+                <div class="upload-zone" id="student-upload-zone">
+                    <i class="fa-solid fa-cloud-arrow-up"></i>
+                    <p>Drag & drop your CSV or Excel file here, or click to browse</p>
+                    <span>Supports .csv, .xlsx, .xls formats</span>
+                    <input type="file" id="student-file-input" accept=".csv, .xlsx, .xls">
+                </div>
+                <div id="student-upload-preview" class="text-center" style="display: none; margin-top: 10px; font-size: 13px; color: var(--accent-success);">
+                    <i class="fa-solid fa-file-excel"></i> <span id="student-file-name">Selected: filename.csv</span> (<span id="student-file-rows">0</span> records)
+                </div>
+                <div class="validation-log" id="student-validation-log">
+                    <h4>Validation Errors</h4>
+                    <ul></ul>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary btn-modal-cancel">Cancel</button>
+                <button type="button" class="btn btn-primary" id="btn-execute-student-upload" disabled>Import Students</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Modal: Bulk Staff Upload -->
+    <div class="modal" id="modal-bulk-register-staff">
+        <div class="modal-dialog glass-panel">
+            <div class="modal-header">
+                <h2>Bulk Register Staff</h2>
+                <button class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="template-bar">
+                    <span>Need the template? Click here to download.</span>
+                    <button class="btn btn-secondary btn-link" id="btn-download-staff-template" style="font-size: 13px;"><i class="fa-solid fa-download"></i> Template (CSV)</button>
+                </div>
+                <div class="upload-zone" id="staff-upload-zone">
+                    <i class="fa-solid fa-cloud-arrow-up"></i>
+                    <p>Drag & drop your CSV or Excel file here, or click to browse</p>
+                    <span>Supports .csv, .xlsx, .xls formats</span>
+                    <input type="file" id="staff-file-input" accept=".csv, .xlsx, .xls">
+                </div>
+                <div id="staff-upload-preview" class="text-center" style="display: none; margin-top: 10px; font-size: 13px; color: var(--accent-success);">
+                    <i class="fa-solid fa-file-excel"></i> <span id="staff-file-name">Selected: filename.csv</span> (<span id="staff-file-rows">0</span> records)
+                </div>
+                <div class="validation-log" id="staff-validation-log">
+                    <h4>Validation Errors</h4>
+                    <ul></ul>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary btn-modal-cancel">Cancel</button>
+                <button type="button" class="btn btn-primary" id="btn-execute-staff-upload" disabled>Import Staff</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Modal: Setup Exam -->
+    <div class="modal" id="modal-add-exam">
+        <div class="modal-dialog glass-panel">
+            <div class="modal-header">
+                <h2>New Exam Setup</h2>
+                <button class="modal-close">&times;</button>
+            </div>
+            <form id="form-add-exam">
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label>Exam Period Title</label>
+                        <input type="text" id="exam-title-input" class="form-control" placeholder="e.g. End of Term 1 Examinations" required>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary btn-modal-cancel">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Create Exam</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Modal: Record Payment -->
+    <div class="modal" id="modal-record-payment">
+        <div class="modal-dialog glass-panel">
+            <div class="modal-header">
+                <h2>Receive Fee Payment</h2>
+                <button class="modal-close">&times;</button>
+            </div>
+            <form id="form-record-payment">
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label>Search and Select Student</label>
+                        <select id="payment-student-select" class="form-control" required></select>
+                    </div>
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label>Amount (GHS)</label>
+                            <input type="number" step="0.01" id="payment-amount-input" class="form-control" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Payment Method</label>
+                            <select id="payment-mode-select" class="form-control">
+                                <option value="Cash">Cash</option>
+                                <option value="Mobile Money">Mobile Money (MoMo)</option>
+                                <option value="Bank Check">Bank Check</option>
+                                <option value="Bank Transfer">Bank Transfer</option>
+                            </select>
+                        </div>
+                        <div class="form-group colspan-2">
+                            <label>Check / Transaction Ref Number</label>
+                            <input type="text" id="payment-ref-input" class="form-control" placeholder="Enter reference ID if applicable">
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary btn-modal-cancel">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Post Payment Receipt</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Modal: Bill Class -->
+    <div class="modal" id="modal-bill-class">
+        <div class="modal-dialog glass-panel">
+            <div class="modal-header">
+                <h2>Bill Class Fees</h2>
+                <button class="modal-close">&times;</button>
+            </div>
+            <form id="form-bill-class">
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label>Select Target Class</label>
+                        <select id="bill-class-select" class="form-control" required></select>
+                    </div>
+                    <div class="form-group">
+                        <label>Billing Description / Item</label>
+                        <input type="text" id="bill-description-input" class="form-control" placeholder="e.g. School Fees, PTA Dues" value="School Fees" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Amount (GHS)</label>
+                        <input type="number" step="0.01" id="bill-amount-input" class="form-control" required>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary btn-modal-cancel">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Process Billing</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Modal: Register Branch -->
+    <div class="modal" id="modal-add-branch">
+        <div class="modal-dialog glass-panel">
+            <div class="modal-header">
+                <h2>Register School Branch</h2>
+                <button class="modal-close">&times;</button>
+            </div>
+            <form id="form-add-branch">
+                <div class="modal-body">
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label>Branch Name</label>
+                            <input type="text" id="branch-name" class="form-control" placeholder="e.g. Kumasi Annexe" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Unique Code</label>
+                            <input type="text" id="branch-code" class="form-control" placeholder="e.g. KMS" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Telephone</label>
+                            <input type="text" id="branch-phone" class="form-control">
+                        </div>
+                        <div class="form-group">
+                            <label>Email Address</label>
+                            <input type="email" id="branch-email" class="form-control">
+                        </div>
+                        <div class="form-group colspan-2">
+                            <label>Address</label>
+                            <input type="text" id="branch-address" class="form-control">
+                        </div>
+                        <div class="form-group colspan-2">
+                            <label>Administrative Notes</label>
+                            <textarea id="branch-notes" class="form-control" rows="3"></textarea>
+                        </div>
+                        
+                        <div class="form-group colspan-2" style="border-top: 1px solid rgba(255, 255, 255, 0.1); padding-top: 15px; margin-top: 10px;">
+                            <h3 style="margin: 0 0 5px 0; font-size: 15px; color: var(--accent-color, #7000ff);"><i class="fa-solid fa-user-shield"></i> Branch Head Teacher Credentials</h3>
+                            <p style="margin: 0; font-size: 12px; color: var(--text-muted, #aaa);">Specify credentials for the school head teacher to configure this branch.</p>
+                        </div>
+                        <div class="form-group">
+                            <label>Head Teacher Full Name</label>
+                            <input type="text" id="branch-head-fullname" class="form-control" placeholder="e.g. Kofi Mensah" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Head Teacher Email</label>
+                            <input type="email" id="branch-head-email" class="form-control" placeholder="e.g. kofi@school.edu">
+                        </div>
+                        <div class="form-group">
+                            <label>Head Teacher Username</label>
+                            <input type="text" id="branch-head-username" class="form-control" placeholder="e.g. kofi_head" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Head Teacher Password</label>
+                            <input type="password" id="branch-head-password" class="form-control" placeholder="Minimum 6 characters" required>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary btn-modal-cancel">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Create Branch Database</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Modal: Create System Admin -->
+    <div class="modal" id="modal-add-sysadmin">
+        <div class="modal-dialog glass-panel">
+            <div class="modal-header">
+                <h2>Create System Admin Account</h2>
+                <button class="modal-close">&times;</button>
+            </div>
+            <form id="form-add-sysadmin">
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label>Login Username</label>
+                        <input type="text" id="sys-username" class="form-control" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Full Name</label>
+                        <input type="text" id="sys-fullname" class="form-control" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Email Address</label>
+                        <input type="email" id="sys-email" class="form-control">
+                    </div>
+                    <div class="form-group">
+                        <label>Secure Password</label>
+                        <input type="password" id="sys-password" class="form-control" required>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary btn-modal-cancel">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Create System Admin</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Modal: Add Book -->
+    <div class="modal" id="modal-add-book">
+        <div class="modal-dialog glass-panel">
+            <div class="modal-header">
+                <h2>Add Book to Registry</h2>
+                <button class="modal-close">&times;</button>
+            </div>
+            <form id="form-add-book">
+                <div class="modal-body">
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label>Book Title</label>
+                            <input type="text" id="book-title" class="form-control" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Author</label>
+                            <input type="text" id="book-author" class="form-control" required>
+                        </div>
+                        <div class="form-group">
+                            <label>ISBN Identifier</label>
+                            <input type="text" id="book-isbn" class="form-control">
+                        </div>
+                        <div class="form-group">
+                            <label>Shelf Location</label>
+                            <input type="text" id="book-location" class="form-control" placeholder="e.g. Shelf B3">
+                        </div>
+                        <div class="form-group">
+                            <label>Quantity Copies</label>
+                            <input type="number" id="book-qty" class="form-control" value="1" required>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary btn-modal-cancel">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Catalog Book</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Modal: Issue Book -->
+    <div class="modal" id="modal-issue-book">
+        <div class="modal-dialog glass-panel">
+            <div class="modal-header">
+                <h2>Issue Library Book</h2>
+                <button class="modal-close">&times;</button>
+            </div>
+            <form id="form-issue-book">
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label>Select Book</label>
+                        <select id="issue-book-select" class="form-control" required></select>
+                    </div>
+                    <div class="form-group">
+                        <label>Select Student</label>
+                        <select id="issue-student-select" class="form-control" required></select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary btn-modal-cancel">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Lend Book</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal: Add Inventory -->
+    <div class="modal" id="modal-add-inventory">
+        <div class="modal-dialog glass-panel">
+            <div class="modal-header">
+                <h2>Add Inventory Item</h2>
+                <button class="modal-close">&times;</button>
+            </div>
+            <form id="form-add-inventory">
+                <div class="modal-body">
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label>Item Name</label>
+                            <input type="text" id="inv-item-name" class="form-control" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Category</label>
+                            <input type="text" id="inv-category" class="form-control" placeholder="e.g. Furniture, Stationery" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Quantity</label>
+                            <input type="number" id="inv-qty" class="form-control" value="1" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Condition</label>
+                            <select id="inv-condition" class="form-control" required>
+                                <option value="Good">Good</option>
+                                <option value="Fair">Fair</option>
+                                <option value="Poor">Poor</option>
+                                <option value="New">New</option>
+                            </select>
+                        </div>
+                        <div class="form-group colspan-2">
+                            <label>Unit Value (GHS)</label>
+                            <input type="number" step="0.01" id="inv-value" class="form-control" value="0.00" required>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary btn-modal-cancel">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Add Item</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Script Entry -->
+    <script src="/js/app.js"></script>
+</body>
+</html>

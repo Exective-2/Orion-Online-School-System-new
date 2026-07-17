@@ -1,3 +1,4 @@
+import contextvars
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker, declarative_base
 from sqlalchemy.pool import NullPool
@@ -9,16 +10,51 @@ Base = declarative_base()
 _engine = None
 _SessionLocal = None
 
+# A dictionary to cache branch engines and sessionmakers for web multi-tenancy
+_branch_engines = {}
+_branch_session_makers = {}
+
+# Context variable to hold the active database URL for the current request context
+current_db_url = contextvars.ContextVar("current_db_url", default=None)
+
 def get_engine():
     global _engine
+    
+    # Check request context (for multi-tenant web app)
+    db_url = current_db_url.get()
+    if db_url is not None:
+        if db_url not in _branch_engines:
+            connect_args = {}
+            pool_kwargs = {}
+            if db_url.startswith("sqlite"):
+                connect_args = {"check_same_thread": False}
+                pool_kwargs = {"poolclass": NullPool}
+            
+            engine = create_engine(
+                db_url,
+                connect_args=connect_args,
+                echo=False,
+                **pool_kwargs
+            )
+            
+            if db_url.startswith("sqlite"):
+                @event.listens_for(engine, "connect")
+                def set_wal_mode(dbapi_conn, connection_record):
+                    dbapi_conn.execute("PRAGMA journal_mode=WAL;")
+                    dbapi_conn.execute("PRAGMA busy_timeout=5000;")
+            
+            _branch_engines[db_url] = engine
+            _branch_session_makers[db_url] = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+            
+        return _branch_engines[db_url]
+
+    # Fallback to default desktop engine
     if _engine is None:
         db_url = get_db_url()
         connect_args = {}
         pool_kwargs = {}
         if db_url.startswith("sqlite"):
             # NullPool: every session.close() truly releases the file lock.
-            # This prevents "database is locked" when sequential operations
-            # (init_db → seed → wizard admin update) each open a new session.
             connect_args = {"check_same_thread": False}
             pool_kwargs = {"poolclass": NullPool}
             
@@ -41,6 +77,11 @@ def get_engine():
 
 def get_session():
     global _SessionLocal
+    db_url = current_db_url.get()
+    if db_url is not None:
+        get_engine()  # ensures engine & sessionmaker exist
+        return _branch_session_makers[db_url]()
+
     if _SessionLocal is None:
         engine = get_engine()
         _SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
@@ -90,6 +131,9 @@ def set_active_branch_db(db_path) -> None:
         Absolute path to the branch's SQLite file.
     """
     global _engine, _SessionLocal
+    db_url = f"sqlite:///{db_path}"
+    current_db_url.set(db_url)
+    
     # Dispose the old engine if one exists
     if _engine is not None:
         try:
@@ -97,7 +141,6 @@ def set_active_branch_db(db_path) -> None:
         except Exception:
             pass
 
-    db_url = f"sqlite:///{db_path}"
     _engine = create_engine(
         db_url,
         connect_args={"check_same_thread": False},
