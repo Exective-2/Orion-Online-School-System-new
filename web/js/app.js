@@ -996,32 +996,25 @@ function handleLoginSubmit(e) {
     // Show loading state on button
     if (submitBtn) { submitBtn.classList.add("loading"); submitBtn.disabled = true; }
 
-    const isParentAttempt = username.toLowerCase().startsWith("parent") || !isNaN(username) || username.toUpperCase().startsWith("SMS") || username.includes("-");
-    const primaryUrl = isParentAttempt ? "/api/parent/login" : "/api/auth/login";
-    const primaryBody = isParentAttempt 
-        ? JSON.stringify({ branch_code: "MAIN", identifier: username, pin: password })
-        : JSON.stringify({ username, password, branch_id: null });
-
-    fetch(primaryUrl, {
+    // First try standard auth endpoint (/api/auth/login) for System Admin, Staff, and Phone logins
+    fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: primaryBody
+        body: JSON.stringify({ username, password, branch_id: null })
     })
     .then(async res => {
         if (!res.ok) {
-            const err = await res.json().catch(() => ({}));
-            // Try fallback to parent login if primary staff login fails
-            if (primaryUrl === "/api/auth/login") {
-                const parentRes = await fetch("/api/parent/login", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ branch_code: "MAIN", identifier: username, pin: password })
-                });
-                if (parentRes.ok) {
-                    const pData = await parentRes.json();
-                    return { token: pData.access_token, role: "Parent", full_name: pData.user.full_name, branch_name: pData.user.branch_name, student_id: pData.user.student_id };
-                }
+            // Fallback to parent portal login if standard auth fails
+            const parentRes = await fetch("/api/parent/login", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ branch_code: "MAIN", identifier: username, pin: password })
+            });
+            if (parentRes.ok) {
+                const pData = await parentRes.json();
+                return { token: pData.access_token, role: "Parent", full_name: pData.user.full_name, branch_name: pData.user.branch_name, student_id: pData.user.student_id };
             }
+            const err = await res.json().catch(() => ({}));
             throw new Error(err.detail || "Invalid username or password");
         }
         return res.json();
