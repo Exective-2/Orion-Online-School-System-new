@@ -198,6 +198,61 @@ body.theme-amethyst {
     --accent-info: #38bdf8;
 }
 
+/* 7. Rose Blossom (Rose Gold & Soft Blush) */
+body.theme-blossom {
+    --bg-primary: #fff0f5;
+    --bg-secondary: #ffffff;
+    --bg-tertiary: #fce4ec;
+    --bg-glass: rgba(255, 255, 255, 0.88);
+    --bg-glass-2: rgba(236, 72, 153, 0.05);
+    --border-glass: rgba(236, 72, 153, 0.15);
+    --border-glass-2: rgba(236, 72, 153, 0.25);
+    --border-focus: #ec4899;
+
+    --text-primary: #701a34;
+    --text-secondary: #9f1239;
+    --text-muted: #e11d48;
+
+    --accent-primary: #ec4899;
+    --accent-primary-glow: rgba(236, 72, 153, 0.25);
+    --accent-secondary: #f43f5e;
+    --accent-secondary-glow: rgba(244, 63, 94, 0.25);
+    --accent-success: #10b981;
+    --accent-warning: #f59e0b;
+    --accent-danger: #e11d48;
+    --accent-info: #06b6d4;
+
+    --shadow-sm: 0 2px 8px rgba(159, 18, 57, 0.06);
+    --shadow-md: 0 8px 24px rgba(159, 18, 57, 0.1);
+    --shadow-lg: 0 20px 60px rgba(159, 18, 57, 0.14);
+    --shadow-glow: 0 0 25px var(--accent-primary-glow);
+}
+
+/* 8. Lavender Glam (Velvet Purple & Lilac Glow) */
+body.theme-lavender {
+    --bg-primary: #140d24;
+    --bg-secondary: #211638;
+    --bg-tertiary: #30214e;
+    --bg-glass: rgba(33, 22, 56, 0.82);
+    --bg-glass-2: rgba(232, 121, 249, 0.06);
+    --border-glass: rgba(232, 121, 249, 0.15);
+    --border-glass-2: rgba(232, 121, 249, 0.25);
+    --border-focus: #e879f9;
+
+    --text-primary: #fdf4ff;
+    --text-secondary: #f0abfc;
+    --text-muted: #a855f7;
+
+    --accent-primary: #e879f9;
+    --accent-primary-glow: rgba(232, 121, 249, 0.35);
+    --accent-secondary: #c084fc;
+    --accent-secondary-glow: rgba(192, 132, 252, 0.35);
+    --accent-success: #34d399;
+    --accent-warning: #fbbf24;
+    --accent-danger: #f43f5e;
+    --accent-info: #38bdf8;
+}
+
 /* ── Theme Picker Dropdown Menu ── */
 .theme-picker-container {
     position: relative;

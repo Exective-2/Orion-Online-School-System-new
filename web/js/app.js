@@ -25,7 +25,7 @@ document.addEventListener("DOMContentLoaded", () => {
     checkSetupAndVerifyAuth();
 });
 
-const ALL_THEMES = ["dark", "light", "emerald", "sapphire", "amber", "amethyst"];
+const ALL_THEMES = ["dark", "light", "emerald", "sapphire", "amber", "amethyst", "blossom", "lavender"];
 
 function setTheme(themeKey) {
     if (!ALL_THEMES.includes(themeKey)) themeKey = "dark";
@@ -60,7 +60,9 @@ function setTheme(themeKey) {
             emerald: '<i class="fa-solid fa-tree"></i>',
             sapphire: '<i class="fa-solid fa-water"></i>',
             amber: '<i class="fa-solid fa-fire"></i>',
-            amethyst: '<i class="fa-solid fa-gem"></i>'
+            amethyst: '<i class="fa-solid fa-gem"></i>',
+            blossom: '<i class="fa-solid fa-seedling"></i>',
+            lavender: '<i class="fa-solid fa-wand-magic-sparkles"></i>'
         };
         iconEl.innerHTML = iconMap[themeKey] || '<i class="fa-solid fa-palette"></i>';
     }
