@@ -41,8 +41,35 @@
     --border-radius-lg: 20px;
 }
 
-/* Light Theme Variables */
-body.light-theme {
+/* ── 6 Modern Theme Options ── */
+
+/* 1. Dark Cyber (Default Dark) */
+body.dark-theme, body.theme-dark {
+    --bg-primary: #080c14;
+    --bg-secondary: #0f1623;
+    --bg-tertiary: #161e2e;
+    --bg-glass: rgba(15, 22, 35, 0.75);
+    --bg-glass-2: rgba(255, 255, 255, 0.04);
+    --border-glass: rgba(255, 255, 255, 0.08);
+    --border-glass-2: rgba(255, 255, 255, 0.12);
+    --border-focus: #3b82f6;
+
+    --text-primary: #f0f4ff;
+    --text-secondary: #8fa3c8;
+    --text-muted: #4d6080;
+
+    --accent-primary: #3b82f6;
+    --accent-primary-glow: rgba(59, 130, 246, 0.35);
+    --accent-secondary: #8b5cf6;
+    --accent-secondary-glow: rgba(139, 92, 246, 0.35);
+    --accent-success: #10b981;
+    --accent-warning: #f59e0b;
+    --accent-danger: #ef4444;
+    --accent-info: #06b6d4;
+}
+
+/* 2. Light Deluxe (Clean Light) */
+body.light-theme, body.theme-light {
     --bg-primary: #f0f4fb;
     --bg-secondary: #ffffff;
     --bg-tertiary: #e8eef8;
@@ -63,11 +90,223 @@ body.light-theme {
     --accent-success: #059669;
     --accent-warning: #d97706;
     --accent-danger: #dc2626;
+    --accent-info: #0891b2;
 
     --shadow-sm: 0 2px 8px rgba(15, 23, 42, 0.06);
     --shadow-md: 0 8px 24px rgba(15, 23, 42, 0.1);
     --shadow-lg: 0 20px 60px rgba(15, 23, 42, 0.14);
     --shadow-glow: 0 0 25px var(--accent-primary-glow);
+}
+
+/* 3. Emerald Forest (Teal & Emerald Dark) */
+body.theme-emerald {
+    --bg-primary: #041713;
+    --bg-secondary: #092620;
+    --bg-tertiary: #113830;
+    --bg-glass: rgba(9, 38, 32, 0.78);
+    --bg-glass-2: rgba(16, 185, 129, 0.05);
+    --border-glass: rgba(16, 185, 129, 0.12);
+    --border-glass-2: rgba(16, 185, 129, 0.2);
+    --border-focus: #10b981;
+
+    --text-primary: #ecfdf5;
+    --text-secondary: #6ee7b7;
+    --text-muted: #2d6a54;
+
+    --accent-primary: #10b981;
+    --accent-primary-glow: rgba(16, 185, 129, 0.35);
+    --accent-secondary: #14b8a6;
+    --accent-secondary-glow: rgba(20, 184, 166, 0.35);
+    --accent-success: #34d399;
+    --accent-warning: #f59e0b;
+    --accent-danger: #f87171;
+    --accent-info: #22d3ee;
+}
+
+/* 4. Sapphire Ocean (Deep Cobalt & Cyan) */
+body.theme-sapphire {
+    --bg-primary: #071328;
+    --bg-secondary: #0e1e3e;
+    --bg-tertiary: #172c54;
+    --bg-glass: rgba(14, 30, 62, 0.78);
+    --bg-glass-2: rgba(6, 182, 212, 0.05);
+    --border-glass: rgba(6, 182, 212, 0.12);
+    --border-glass-2: rgba(6, 182, 212, 0.2);
+    --border-focus: #06b6d4;
+
+    --text-primary: #f0f9ff;
+    --text-secondary: #7dd3fc;
+    --text-muted: #345e8b;
+
+    --accent-primary: #06b6d4;
+    --accent-primary-glow: rgba(6, 182, 212, 0.35);
+    --accent-secondary: #3b82f6;
+    --accent-secondary-glow: rgba(59, 130, 246, 0.35);
+    --accent-success: #10b981;
+    --accent-warning: #fbbf24;
+    --accent-danger: #f87171;
+    --accent-info: #38bdf8;
+}
+
+/* 5. Sunset Amber (Warm Bronze & Amber) */
+body.theme-amber {
+    --bg-primary: #180e07;
+    --bg-secondary: #29180c;
+    --bg-tertiary: #3d2514;
+    --bg-glass: rgba(41, 24, 12, 0.8);
+    --bg-glass-2: rgba(245, 158, 11, 0.05);
+    --border-glass: rgba(245, 158, 11, 0.12);
+    --border-glass-2: rgba(245, 158, 11, 0.2);
+    --border-focus: #f59e0b;
+
+    --text-primary: #fffbeb;
+    --text-secondary: #fde68a;
+    --text-muted: #84532b;
+
+    --accent-primary: #f59e0b;
+    --accent-primary-glow: rgba(245, 158, 11, 0.35);
+    --accent-secondary: #f97316;
+    --accent-secondary-glow: rgba(249, 115, 22, 0.35);
+    --accent-success: #10b981;
+    --accent-warning: #facc15;
+    --accent-danger: #ef4444;
+    --accent-info: #38bdf8;
+}
+
+/* 6. Amethyst Neon (Cyber Amethyst & Pink) */
+body.theme-amethyst {
+    --bg-primary: #12091c;
+    --bg-secondary: #1e102d;
+    --bg-tertiary: #2c1842;
+    --bg-glass: rgba(30, 16, 45, 0.8);
+    --bg-glass-2: rgba(192, 132, 252, 0.05);
+    --border-glass: rgba(192, 132, 252, 0.12);
+    --border-glass-2: rgba(192, 132, 252, 0.2);
+    --border-focus: #c084fc;
+
+    --text-primary: #faf5ff;
+    --text-secondary: #e9d5ff;
+    --text-muted: #6b3f94;
+
+    --accent-primary: #c084fc;
+    --accent-primary-glow: rgba(192, 132, 252, 0.35);
+    --accent-secondary: #f43f5e;
+    --accent-secondary-glow: rgba(244, 63, 94, 0.35);
+    --accent-success: #34d399;
+    --accent-warning: #fbbf24;
+    --accent-danger: #fb7185;
+    --accent-info: #38bdf8;
+}
+
+/* ── Theme Picker Dropdown Menu ── */
+.theme-picker-container {
+    position: relative;
+    display: inline-block;
+}
+
+.theme-dropdown {
+    position: absolute;
+    top: calc(100% + 10px);
+    right: 0;
+    width: 290px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-glass-2);
+    border-radius: var(--border-radius);
+    padding: 12px;
+    box-shadow: var(--shadow-lg);
+    z-index: 1000;
+    display: none;
+    flex-direction: column;
+    gap: 8px;
+    backdrop-filter: blur(16px);
+    animation: themeDropFade 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.theme-dropdown.show {
+    display: flex;
+}
+
+@keyframes themeDropFade {
+    from { opacity: 0; transform: translateY(-8px) scale(0.96); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.theme-dropdown-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border-glass);
+    margin-bottom: 4px;
+}
+
+.theme-dropdown-header h4 {
+    margin: 0;
+    font-size: 13px;
+    font-weight: 800;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.theme-option-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 10px;
+    border-radius: var(--border-radius-sm);
+    background: var(--bg-glass-2);
+    border: 1px solid var(--border-glass);
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.theme-option-card:hover {
+    border-color: var(--accent-primary);
+    background: rgba(255, 255, 255, 0.06);
+    transform: translateX(2px);
+}
+
+.theme-option-card.active {
+    border-color: var(--accent-primary);
+    background: var(--bg-tertiary);
+    box-shadow: 0 0 12px var(--accent-primary-glow);
+}
+
+.theme-option-info {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.theme-option-swatch {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+    border: 2px solid rgba(255, 255, 255, 0.2);
+}
+
+.theme-option-name {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.theme-option-check {
+    font-size: 12px;
+    color: var(--accent-primary);
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.theme-option-card.active .theme-option-check {
+    opacity: 1;
 }
 
 /* ── 2. Reset & Base ── */

@@ -25,16 +25,49 @@ document.addEventListener("DOMContentLoaded", () => {
     checkSetupAndVerifyAuth();
 });
 
-function initTheme() {
-    if (activeTheme === "light") {
-        document.body.classList.remove("dark-theme");
+const ALL_THEMES = ["dark", "light", "emerald", "sapphire", "amber", "amethyst"];
+
+function setTheme(themeKey) {
+    if (!ALL_THEMES.includes(themeKey)) themeKey = "dark";
+    activeTheme = themeKey;
+    localStorage.setItem("orion_theme", themeKey);
+
+    ALL_THEMES.forEach(t => {
+        document.body.classList.remove(`${t}-theme`, `theme-${t}`);
+    });
+
+    if (themeKey === "light") {
         document.body.classList.add("light-theme");
-        document.getElementById("btn-theme-toggle").innerHTML = '<i class="fa-solid fa-sun"></i>';
-    } else {
+    } else if (themeKey === "dark") {
         document.body.classList.add("dark-theme");
-        document.body.classList.remove("light-theme");
-        document.getElementById("btn-theme-toggle").innerHTML = '<i class="fa-solid fa-moon"></i>';
+    } else {
+        document.body.classList.add(`theme-${themeKey}`);
     }
+
+    document.querySelectorAll(".theme-option-card").forEach(card => {
+        if (card.getAttribute("data-theme") === themeKey) {
+            card.classList.add("active");
+        } else {
+            card.classList.remove("active");
+        }
+    });
+
+    const iconEl = document.getElementById("btn-theme-toggle");
+    if (iconEl) {
+        const iconMap = {
+            dark: '<i class="fa-solid fa-moon"></i>',
+            light: '<i class="fa-solid fa-sun"></i>',
+            emerald: '<i class="fa-solid fa-tree"></i>',
+            sapphire: '<i class="fa-solid fa-water"></i>',
+            amber: '<i class="fa-solid fa-fire"></i>',
+            amethyst: '<i class="fa-solid fa-gem"></i>'
+        };
+        iconEl.innerHTML = iconMap[themeKey] || '<i class="fa-solid fa-palette"></i>';
+    }
+}
+
+function initTheme() {
+    setTheme(activeTheme);
 }
 
 function checkSetupAndVerifyAuth() {
@@ -539,31 +572,42 @@ function initGlobalEventListeners() {
         });
     }
 
-    // Theme Switcher
-    document.getElementById("btn-theme-toggle").addEventListener("click", () => {
-        if (document.body.classList.contains("dark-theme")) {
-            document.body.classList.remove("dark-theme");
-            document.body.classList.add("light-theme");
-            localStorage.setItem("orion_theme", "light");
-            document.getElementById("btn-theme-toggle").innerHTML = '<i class="fa-solid fa-sun"></i>';
-        } else {
-            document.body.classList.add("dark-theme");
-            document.body.classList.remove("light-theme");
-            localStorage.setItem("orion_theme", "dark");
-            document.getElementById("btn-theme-toggle").innerHTML = '<i class="fa-solid fa-moon"></i>';
-        }
-    });
-
-    // Profile menu trigger
+    // Theme Switcher & Dropdown Menu
+    const themeBtn = document.getElementById("btn-theme-toggle");
+    const themeMenu = document.getElementById("theme-picker-menu");
     const profileTrigger = document.getElementById("profile-info-trigger");
     const dropdownMenu = document.getElementById("profile-dropdown-menu");
-    profileTrigger.addEventListener("click", (e) => {
-        e.stopPropagation();
-        dropdownMenu.classList.toggle("show");
+
+    if (themeBtn && themeMenu) {
+        themeBtn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            themeMenu.classList.toggle("show");
+            if (dropdownMenu) dropdownMenu.classList.remove("show");
+        });
+    }
+
+    document.querySelectorAll(".theme-option-card").forEach(card => {
+        card.addEventListener("click", (e) => {
+            e.stopPropagation();
+            const themeKey = card.getAttribute("data-theme");
+            setTheme(themeKey);
+            if (themeMenu) themeMenu.classList.remove("show");
+            const themeName = card.querySelector(".theme-option-name") ? card.querySelector(".theme-option-name").textContent : themeKey;
+            showToast(`Theme changed to ${themeName}`, "info");
+        });
     });
 
+    if (profileTrigger && dropdownMenu) {
+        profileTrigger.addEventListener("click", (e) => {
+            e.stopPropagation();
+            dropdownMenu.classList.toggle("show");
+            if (themeMenu) themeMenu.classList.remove("show");
+        });
+    }
+
     document.addEventListener("click", () => {
-        dropdownMenu.classList.remove("show");
+        if (dropdownMenu) dropdownMenu.classList.remove("show");
+        if (themeMenu) themeMenu.classList.remove("show");
     });
 
     // Logout

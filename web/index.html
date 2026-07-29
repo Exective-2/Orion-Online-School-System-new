@@ -410,9 +410,58 @@
                             <select id="header-branch-switcher" style="display:none; font-size:12px; font-weight:700; background:rgba(99,102,241,0.25); color:#ffffff; border:1px solid #818cf8; border-radius:6px; padding:4px 8px; cursor:pointer;" title="Switch Branch Context"></select>
                             <span class="badge badge-academic" id="header-academic-badge"><i class="fa-solid fa-calendar"></i> 2026/2027 - Term 1</span>
                             
-                            <button class="btn-icon" id="btn-theme-toggle" title="Toggle Light/Dark Theme">
-                                <i class="fa-solid fa-moon"></i>
-                            </button>
+                            <div class="theme-picker-container">
+                                <button class="btn-icon" id="btn-theme-toggle" title="Select Theme Options">
+                                    <i class="fa-solid fa-palette"></i>
+                                </button>
+                                <div class="theme-dropdown shadow-lg" id="theme-picker-menu">
+                                    <div class="theme-dropdown-header">
+                                        <h4><i class="fa-solid fa-paint-roller"></i> Theme Options</h4>
+                                    </div>
+                                    <div class="theme-option-card" data-theme="dark">
+                                        <div class="theme-option-info">
+                                            <div class="theme-option-swatch" style="background: linear-gradient(135deg, #080c14 50%, #3b82f6 50%); color: #3b82f6;"><i class="fa-solid fa-moon"></i></div>
+                                            <span class="theme-option-name">Dark Cyber</span>
+                                        </div>
+                                        <i class="fa-solid fa-circle-check theme-option-check"></i>
+                                    </div>
+                                    <div class="theme-option-card" data-theme="light">
+                                        <div class="theme-option-info">
+                                            <div class="theme-option-swatch" style="background: linear-gradient(135deg, #f0f4fb 50%, #2563eb 50%); color: #2563eb;"><i class="fa-solid fa-sun"></i></div>
+                                            <span class="theme-option-name">Light Deluxe</span>
+                                        </div>
+                                        <i class="fa-solid fa-circle-check theme-option-check"></i>
+                                    </div>
+                                    <div class="theme-option-card" data-theme="emerald">
+                                        <div class="theme-option-info">
+                                            <div class="theme-option-swatch" style="background: linear-gradient(135deg, #041713 50%, #10b981 50%); color: #10b981;"><i class="fa-solid fa-tree"></i></div>
+                                            <span class="theme-option-name">Emerald Forest</span>
+                                        </div>
+                                        <i class="fa-solid fa-circle-check theme-option-check"></i>
+                                    </div>
+                                    <div class="theme-option-card" data-theme="sapphire">
+                                        <div class="theme-option-info">
+                                            <div class="theme-option-swatch" style="background: linear-gradient(135deg, #071328 50%, #06b6d4 50%); color: #06b6d4;"><i class="fa-solid fa-water"></i></div>
+                                            <span class="theme-option-name">Sapphire Ocean</span>
+                                        </div>
+                                        <i class="fa-solid fa-circle-check theme-option-check"></i>
+                                    </div>
+                                    <div class="theme-option-card" data-theme="amber">
+                                        <div class="theme-option-info">
+                                            <div class="theme-option-swatch" style="background: linear-gradient(135deg, #180e07 50%, #f59e0b 50%); color: #f59e0b;"><i class="fa-solid fa-fire"></i></div>
+                                            <span class="theme-option-name">Sunset Amber</span>
+                                        </div>
+                                        <i class="fa-solid fa-circle-check theme-option-check"></i>
+                                    </div>
+                                    <div class="theme-option-card" data-theme="amethyst">
+                                        <div class="theme-option-info">
+                                            <div class="theme-option-swatch" style="background: linear-gradient(135deg, #12091c 50%, #c084fc 50%); color: #c084fc;"><i class="fa-solid fa-gem"></i></div>
+                                            <span class="theme-option-name">Amethyst Neon</span>
+                                        </div>
+                                        <i class="fa-solid fa-circle-check theme-option-check"></i>
+                                    </div>
+                                </div>
+                            </div>
                             
                             <div class="user-profile-menu">
                                 <div class="profile-info" id="profile-info-trigger">
@@ -4989,6 +5038,6 @@
     </div>
 
     <!-- Script Entry -->
-    <script src="/js/app.js?v=20260729_1335"></script>
+    <script src="/js/app.js?v=20260729_2200"></script>
 </body>
 </html>
