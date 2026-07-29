@@ -42,6 +42,10 @@ def get_master_engine():
             env_db_url = sanitize_db_url(env_db_url)
             _master_engine = create_engine(
                 env_db_url,
+                pool_pre_ping=True,
+                pool_recycle=300,
+                pool_size=10,
+                max_overflow=20,
                 echo=False,
             )
         else:

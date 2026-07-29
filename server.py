@@ -42,7 +42,11 @@ JWT_SECRET = "orion-super-secret-key-12345!@#$"
 JWT_ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 480
 
+from fastapi.middleware.gzip import GZipMiddleware
+
 app = FastAPI(title="Orion School Management System API", version="1.0.0")
+
+app.add_middleware(GZipMiddleware, minimum_size=500)
 
 app.add_middleware(
     CORSMiddleware,
@@ -51,6 +55,14 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.middleware("http")
+async def add_cache_control_header(request: Request, call_next):
+    response = await call_next(request)
+    path = request.url.path
+    if path.startswith("/static/") or path.startswith("/uploads/") or path.endswith((".js", ".css", ".png", ".jpg", ".jpeg", ".svg", ".ico", ".woff2")):
+        response.headers["Cache-Control"] = "public, max-age=86400"
+    return response
 
 # Initialize master defaults on load
 try:

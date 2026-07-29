@@ -5741,14 +5741,16 @@ window.deleteBranch = deleteBranch;
              });
         });
 
-    // Load sub-tab contents
-    loadSysadminGlobalUsers();
-    loadSysadminHealth();
-    loadSysadminSMSGateway();
-    loadSysadminPaymentGateway();
-    loadSysadminAuditLogs();
-    loadSysadminBroadcasts();
-    loadSysadminBilling();
+    // Defer non-critical sub-tab requests so the main Sysadmin Overview renders instantly
+    setTimeout(() => {
+        loadSysadminGlobalUsers();
+        loadSysadminHealth();
+        loadSysadminSMSGateway();
+        loadSysadminPaymentGateway();
+        loadSysadminAuditLogs();
+        loadSysadminBroadcasts();
+        loadSysadminBilling();
+    }, 150);
 }
 
 function loadSysadminSMSGateway() {

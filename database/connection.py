@@ -54,6 +54,12 @@ def get_engine():
                     conn.commit()
                 
                 connect_args = {"options": f"-c search_path={schema_name},public"}
+                pool_kwargs = {
+                    "pool_pre_ping": True,
+                    "pool_recycle": 300,
+                    "pool_size": 10,
+                    "max_overflow": 20
+                }
             elif db_url.startswith("sqlite"):
                 connect_args = {"check_same_thread": False}
                 pool_kwargs = {"poolclass": NullPool}
