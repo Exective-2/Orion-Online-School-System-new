@@ -139,6 +139,12 @@ def save_config(config_dict):
 config = load_config()
 
 def get_db_url():
+    env_db_url = os.environ.get("DATABASE_URL") or os.environ.get("POSTGRES_URL")
+    if env_db_url:
+        if env_db_url.startswith("postgres://"):
+            env_db_url = env_db_url.replace("postgres://", "postgresql://", 1)
+        return env_db_url
+
     db_type = config.get("db_type", "sqlite")
     if db_type == "sqlite":
         return f"sqlite:///{DATABASE_PATH}"

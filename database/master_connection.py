@@ -35,22 +35,32 @@ def get_master_engine():
     """Return (and lazily create) the SQLAlchemy engine for ``orion_master.db``."""
     global _master_engine
     if _master_engine is None:
+        import os
         from config import DATA_DIR
-        db_path = DATA_DIR / "orion_master.db"
-        _master_engine = create_engine(
-            f"sqlite:///{db_path}",
-            connect_args={"check_same_thread": False},
-            poolclass=NullPool,
-            echo=False,
-        )
+        env_db_url = os.environ.get("MASTER_DATABASE_URL") or os.environ.get("DATABASE_URL") or os.environ.get("POSTGRES_URL")
+        if env_db_url:
+            if env_db_url.startswith("postgres://"):
+                env_db_url = env_db_url.replace("postgres://", "postgresql://", 1)
+            _master_engine = create_engine(
+                env_db_url,
+                echo=False,
+            )
+        else:
+            db_path = DATA_DIR / "orion_master.db"
+            _master_engine = create_engine(
+                f"sqlite:///{db_path}",
+                connect_args={"check_same_thread": False},
+                poolclass=NullPool,
+                echo=False,
+            )
 
-        @event.listens_for(_master_engine, "connect")
-        def _set_pragmas(dbapi_conn, _record):
-            try:
-                dbapi_conn.execute("PRAGMA journal_mode=WAL;")
-                dbapi_conn.execute("PRAGMA busy_timeout=5000;")
-            except Exception:
-                pass
+            @event.listens_for(_master_engine, "connect")
+            def _set_pragmas(dbapi_conn, _record):
+                try:
+                    dbapi_conn.execute("PRAGMA journal_mode=WAL;")
+                    dbapi_conn.execute("PRAGMA busy_timeout=5000;")
+                except Exception:
+                    pass
 
     return _master_engine
 
