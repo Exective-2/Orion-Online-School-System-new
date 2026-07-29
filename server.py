@@ -77,14 +77,7 @@ def get_branch_db_filename(branch_id: int) -> Optional[str]:
         session.close()
     return None
 
-def verify_password(stored_password: str, provided_password: str) -> bool:
-    try:
-        salt_hex, hash_hex = stored_password.split(":")
-        salt = bytes.fromhex(salt_hex)
-        pwd_hash = hashlib.pbkdf2_hmac('sha256', provided_password.encode('utf-8'), salt, 100000)
-        return pwd_hash.hex() == hash_hex
-    except Exception:
-        return False
+from database.seed import verify_password
 
 def hash_password(password: str) -> str:
     salt = os.urandom(16)
