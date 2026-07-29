@@ -14,7 +14,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse, HTMLResponse
 from pydantic import BaseModel
 
-from database.connection import get_session, init_db, current_db_url, close_branch_engine
+from database.connection import get_session, init_db, current_db_url, close_branch_engine, get_branch_db_url
 from database.master_connection import get_master_session, init_master_defaults, get_branch_session
 from database.master_models import Branch, SystemAdmin, BranchAdmin, MasterAuditLog, GlobalAnnouncement, GlobalSMSGateway, GlobalPaymentGateway
 from database.models import (
@@ -124,8 +124,7 @@ async def db_session_middleware(request: Request, call_next):
 
             if branch_id:
                 db_filename = get_branch_db_filename(branch_id)
-                if db_filename:
-                    db_url = f"sqlite:///{DATA_DIR}/{db_filename}"
+                db_url = get_branch_db_url(branch_id, db_filename)
         except Exception:
             pass
             
@@ -410,12 +409,8 @@ def login(req: LoginRequest):
         m_session.close()
         
     for br in branches:
-        # Check this branch db
-        db_path = DATA_DIR / br.db_filename
-        if not db_path.exists():
-            continue
-            
-        token = current_db_url.set(f"sqlite:///{db_path}")
+        db_url = get_branch_db_url(br.id, br.db_filename)
+        token = current_db_url.set(db_url)
         try:
             b_session = get_session()
             user = (
@@ -518,10 +513,8 @@ def request_otp(req: OTPRequest):
     # 2. Search Branch Users (Staff & Parents) across active branches
     if not user_payload:
         for br in branches:
-            db_path = DATA_DIR / br.db_filename
-            if not db_path.exists():
-                continue
-            token = current_db_url.set(f"sqlite:///{db_path}")
+            db_url = get_branch_db_url(br.id, br.db_filename)
+            token = current_db_url.set(db_url)
             try:
                 b_session = get_session()
 
@@ -5111,24 +5104,19 @@ def sysadmin_get_branches(user=Depends(get_current_user)):
         branches = m_session.query(Branch).order_by(Branch.name).all()
         res = []
         for b in branches:
-            db_path = DATA_DIR / b.db_filename
             students_cnt = 0
             staff_cnt = 0
-            if db_path.exists():
+            try:
+                b_url = get_branch_db_url(b.id, b.db_filename)
+                token = current_db_url.set(b_url)
                 try:
-                    from sqlalchemy import create_engine
-                    from sqlalchemy.orm import sessionmaker
-                    engine = create_engine(f"sqlite:///{db_path}")
-                    SessionLocal = sessionmaker(bind=engine)
-                    session = SessionLocal()
-                    try:
-                        students_cnt = session.query(Student).filter(Student.status == "Active").count()
-                        staff_cnt = session.query(Staff).filter(Staff.status == "Active").count()
-                    finally:
-                        session.close()
-                        engine.dispose()
-                except Exception:
-                    pass
+                    b_sess = get_session()
+                    students_cnt = b_sess.query(Student).filter(Student.status == "Active").count()
+                    staff_cnt = b_sess.query(Staff).filter(Staff.status == "Active").count()
+                finally:
+                    current_db_url.reset(token)
+            except Exception:
+                pass
                     
             fee_per_student = getattr(b, "system_fee", 0.0) or 0.0
             total_fee = students_cnt * fee_per_student
@@ -5218,8 +5206,8 @@ def sysadmin_create_branch(req: BranchCreate, user=Depends(get_current_user)):
         m_session.add(branch_admin)
         m_session.flush()
         
-        branch_db_path = DATA_DIR / db_filename
-        token = current_db_url.set(f"sqlite:///{branch_db_path}")
+        branch_db_url = get_branch_db_url(branch.id, db_filename)
+        token = current_db_url.set(branch_db_url)
         try:
             init_db()
             seed_database(seed_demo=False)
@@ -5356,11 +5344,19 @@ def sysadmin_delete_branch(branch_id: int, user=Depends(get_current_user)):
         m_session.commit()
 
         # 4. Close database connections / dispose engine to release file locks
-        if db_filename:
-            close_branch_engine(db_filename)
+        close_branch_engine(db_filename=db_filename, branch_id=branch_id)
+        
+        base_url = get_db_url()
+        if base_url.startswith("postgresql") or base_url.startswith("postgres"):
+            try:
+                from sqlalchemy import text
+                with get_master_engine().connect() as conn:
+                    conn.execute(text(f'DROP SCHEMA IF EXISTS "branch_{branch_id}" CASCADE;'))
+                    conn.commit()
+            except Exception as schema_err:
+                print(f"Notice: Failed to drop branch_{branch_id} schema: {schema_err}")
+        elif db_filename:
             db_file_path = DATA_DIR / db_filename
-            
-            # Remove main DB file as well as WAL and SHM journal files
             for f_path in [db_file_path, Path(str(db_file_path) + "-wal"), Path(str(db_file_path) + "-shm")]:
                 if f_path.exists():
                     try:

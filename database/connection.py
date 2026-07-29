@@ -17,6 +17,17 @@ _branch_session_makers = {}
 # Context variable to hold the active database URL for the current request context
 current_db_url = contextvars.ContextVar("current_db_url", default=None)
 
+def get_branch_db_url(branch_id: int, db_filename: str = None) -> str:
+    base_url = get_db_url()
+    if base_url.startswith("postgresql") or base_url.startswith("postgres"):
+        schema_name = f"branch_{branch_id}"
+        if "?" in base_url:
+            return f"{base_url}&branch_schema={schema_name}"
+        return f"{base_url}?branch_schema={schema_name}"
+    else:
+        filename = db_filename or f"branch_{branch_id}.db"
+        return f"sqlite:///{DATA_DIR}/{filename}"
+
 def get_engine():
     global _engine
     
@@ -26,12 +37,30 @@ def get_engine():
         if db_url not in _branch_engines:
             connect_args = {}
             pool_kwargs = {}
-            if db_url.startswith("sqlite"):
+            target_url = db_url
+
+            if "branch_schema=" in db_url:
+                schema_name = db_url.split("branch_schema=")[-1].split("&")[0]
+                if "?branch_schema=" in db_url:
+                    target_url = db_url.split("?branch_schema=")[0]
+                else:
+                    target_url = db_url.replace(f"&branch_schema={schema_name}", "")
+                
+                # Ensure PostgreSQL schema exists
+                from sqlalchemy import text
+                from database.master_connection import get_master_engine
+                m_engine = get_master_engine()
+                with m_engine.connect() as conn:
+                    conn.execute(text(f'CREATE SCHEMA IF NOT EXISTS "{schema_name}";'))
+                    conn.commit()
+                
+                connect_args = {"options": f"-c search_path={schema_name},public"}
+            elif db_url.startswith("sqlite"):
                 connect_args = {"check_same_thread": False}
                 pool_kwargs = {"poolclass": NullPool}
             
             engine = create_engine(
-                db_url,
+                target_url,
                 connect_args=connect_args,
                 echo=False,
                 **pool_kwargs
@@ -137,19 +166,23 @@ def reset_engine():
     _SessionLocal = None
 
 
-def close_branch_engine(db_filename: str) -> None:
-    """Dispose cached SQLAlchemy engine for a branch database file to release file locks."""
+def close_branch_engine(db_filename: str = None, branch_id: int = None) -> None:
+    """Dispose cached SQLAlchemy engine for a branch database file or schema."""
     global _branch_engines, _branch_session_makers
-    if not db_filename:
-        return
-    db_url = f"sqlite:///{DATA_DIR}/{db_filename}"
-    engine = _branch_engines.pop(db_url, None)
-    _branch_session_makers.pop(db_url, None)
-    if engine is not None:
-        try:
-            engine.dispose()
-        except Exception:
-            pass
+    urls_to_remove = []
+    if branch_id:
+        urls_to_remove.append(get_branch_db_url(branch_id, db_filename))
+    if db_filename:
+        urls_to_remove.append(f"sqlite:///{DATA_DIR}/{db_filename}")
+        
+    for db_url in urls_to_remove:
+        engine = _branch_engines.pop(db_url, None)
+        _branch_session_makers.pop(db_url, None)
+        if engine is not None:
+            try:
+                engine.dispose()
+            except Exception:
+                pass
 
 
 def set_active_branch_db(db_path) -> None:
