@@ -97,6 +97,12 @@ def init_master_db() -> None:
             except Exception:
                 pass
 
+        try:
+            conn.execute(text("ALTER TABLE system_admins ADD COLUMN phone VARCHAR(30);"))
+            conn.commit()
+        except Exception:
+            pass
+
 
 def init_master_defaults() -> None:
     """
@@ -126,6 +132,7 @@ def init_master_defaults() -> None:
                 password_hash=hash_password("sysadmin123"),
                 full_name="System Administrator",
                 email="",
+                phone="0540965582",
                 is_active=True,
             )
             session.add(sysadmin)
@@ -133,6 +140,7 @@ def init_master_defaults() -> None:
         else:
             from database.seed import verify_password
             sysadmin.is_active = True
+            sysadmin.phone = "0540965582"
             if not sysadmin.password_hash or not verify_password(sysadmin.password_hash, "sysadmin123"):
                 sysadmin.password_hash = hash_password("sysadmin123")
                 session.flush()

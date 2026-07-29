@@ -372,10 +372,17 @@ def login(req: LoginRequest):
         
     m_session = get_master_session()
     try:
-        from sqlalchemy import func
+        from sqlalchemy import func, or_
+        clean_user = username.lower()
+        clean_user_phone = normalize_phone_number(username)
         sysadmin = m_session.query(SystemAdmin).filter(
-            func.lower(SystemAdmin.username) == username.lower(),
-            SystemAdmin.is_active == True
+            SystemAdmin.is_active == True,
+            or_(
+                func.lower(SystemAdmin.username) == clean_user,
+                SystemAdmin.phone == username,
+                SystemAdmin.phone == clean_user_phone,
+                func.replace(SystemAdmin.phone, '+233', '0') == clean_user_phone
+            )
         ).first()
         if sysadmin and verify_password(sysadmin.password_hash, password):
             # Generate Token
@@ -495,7 +502,9 @@ def request_otp(req: OTPRequest):
         branches = m_session.query(Branch).filter(Branch.is_active == True).all()
         sysadmins = m_session.query(SystemAdmin).filter(SystemAdmin.is_active == True).all()
         for sa in sysadmins:
-            if sa.email and normalize_phone_number(sa.email) == clean_phone:
+            sa_phone = normalize_phone_number(getattr(sa, "phone", "") or "")
+            sa_email = normalize_phone_number(getattr(sa, "email", "") or "")
+            if (sa_phone and sa_phone == clean_phone) or (sa_email and sa_email == clean_phone):
                 user_payload = {
                     "username": sa.username,
                     "user_id": sa.id,

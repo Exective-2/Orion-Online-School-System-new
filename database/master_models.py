@@ -66,6 +66,7 @@ class SystemAdmin(MasterBase):
     password_hash = Column(String(300), nullable=False)
     full_name = Column(String(120), nullable=False)
     email = Column(String(120), nullable=True)
+    phone = Column(String(30), nullable=True)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
