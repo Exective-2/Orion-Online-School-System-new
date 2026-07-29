@@ -27,9 +27,34 @@ document.addEventListener("DOMContentLoaded", () => {
 
 const ALL_THEMES = ["dark", "light", "emerald", "sapphire", "amber", "amethyst", "blossom", "lavender"];
 
+function getThemeStorageKey() {
+    if (currentUser && (currentUser.username || currentUser.user_id || currentUser.full_name)) {
+        const identifier = currentUser.username || currentUser.user_id || currentUser.full_name;
+        const branchKey = currentUser.branch_id ? `_b${currentUser.branch_id}` : "_master";
+        return `orion_theme_user_${identifier.toString().replace(/[^a-zA-Z0-9_]/g, '_')}${branchKey}`;
+    }
+    return "orion_theme_guest";
+}
+
+function getUserSavedTheme() {
+    const key = getThemeStorageKey();
+    const saved = localStorage.getItem(key);
+    if (saved && ALL_THEMES.includes(saved)) {
+        return saved;
+    }
+    const fallback = localStorage.getItem("orion_theme");
+    if (fallback && ALL_THEMES.includes(fallback)) {
+        return fallback;
+    }
+    return "dark";
+}
+
 function setTheme(themeKey) {
     if (!ALL_THEMES.includes(themeKey)) themeKey = "dark";
     activeTheme = themeKey;
+
+    const userKey = getThemeStorageKey();
+    localStorage.setItem(userKey, themeKey);
     localStorage.setItem("orion_theme", themeKey);
 
     ALL_THEMES.forEach(t => {
@@ -69,7 +94,7 @@ function setTheme(themeKey) {
 }
 
 function initTheme() {
-    setTheme(activeTheme);
+    setTheme(getUserSavedTheme());
 }
 
 function checkSetupAndVerifyAuth() {
@@ -178,6 +203,9 @@ function parseTokenAndRoute() {
         currentBranchId = payload.branch_id;
         currentBranchName = payload.branch_name;
         
+        // Restore user's personal theme preference
+        initTheme();
+
         // Show main application view first
         showView("view-main-layout");
 
@@ -1032,6 +1060,7 @@ function handleLogout() {
     currentUser = null;
     currentBranchId = null;
     currentBranchName = null;
+    initTheme();
     localStorage.removeItem("orion_token");
     const appLayout = document.querySelector(".app-layout");
     if (appLayout) appLayout.classList.remove("is-parent-user");
