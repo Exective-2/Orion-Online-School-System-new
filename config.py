@@ -138,12 +138,43 @@ def save_config(config_dict):
 # Load config globally
 config = load_config()
 
+VALID_LIBPQ_PARAMS = {
+    "sslmode", "connect_timeout", "dbname", "host", "hostaddr", 
+    "port", "user", "password", "options", "application_name", 
+    "fallback_application_name", "keepalives", "keepalives_idle",
+    "keepalives_interval", "keepalives_count", "sslcert", "sslkey", 
+    "sslrootcert", "sslcrl", "requiressl", "gsslib", "target_session_attrs"
+}
+
+def sanitize_db_url(url: str) -> str:
+    if not url:
+        return ""
+    if url.startswith("postgres://"):
+        url = url.replace("postgres://", "postgresql://", 1)
+    if url.startswith("postgresql"):
+        try:
+            from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
+            parsed = urlparse(url)
+            if parsed.query:
+                qs = parse_qs(parsed.query, keep_blank_values=True)
+                clean_qs = {k: v for k, v in qs.items() if k.lower() in VALID_LIBPQ_PARAMS}
+                new_query = urlencode(clean_qs, doseq=True)
+                url = urlunparse((
+                    parsed.scheme,
+                    parsed.netloc,
+                    parsed.path,
+                    parsed.params,
+                    new_query,
+                    parsed.fragment
+                ))
+        except Exception:
+            pass
+    return url
+
 def get_db_url():
     env_db_url = os.environ.get("DATABASE_URL") or os.environ.get("POSTGRES_URL")
     if env_db_url:
-        if env_db_url.startswith("postgres://"):
-            env_db_url = env_db_url.replace("postgres://", "postgresql://", 1)
-        return env_db_url
+        return sanitize_db_url(env_db_url)
 
     db_type = config.get("db_type", "sqlite")
     if db_type == "sqlite":

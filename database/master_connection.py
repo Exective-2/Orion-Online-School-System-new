@@ -36,11 +36,10 @@ def get_master_engine():
     global _master_engine
     if _master_engine is None:
         import os
-        from config import DATA_DIR
+        from config import DATA_DIR, sanitize_db_url
         env_db_url = os.environ.get("MASTER_DATABASE_URL") or os.environ.get("DATABASE_URL") or os.environ.get("POSTGRES_URL")
         if env_db_url:
-            if env_db_url.startswith("postgres://"):
-                env_db_url = env_db_url.replace("postgres://", "postgresql://", 1)
+            env_db_url = sanitize_db_url(env_db_url)
             _master_engine = create_engine(
                 env_db_url,
                 echo=False,

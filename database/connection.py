@@ -41,10 +41,9 @@ def get_engine():
 
             if "branch_schema=" in db_url:
                 schema_name = db_url.split("branch_schema=")[-1].split("&")[0]
-                if "?branch_schema=" in db_url:
-                    target_url = db_url.split("?branch_schema=")[0]
-                else:
-                    target_url = db_url.replace(f"&branch_schema={schema_name}", "")
+                from config import sanitize_db_url
+                target_url = db_url.replace(f"?branch_schema={schema_name}", "").replace(f"&branch_schema={schema_name}", "")
+                target_url = sanitize_db_url(target_url)
                 
                 # Ensure PostgreSQL schema exists
                 from sqlalchemy import text
