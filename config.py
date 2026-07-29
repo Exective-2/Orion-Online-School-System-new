@@ -52,6 +52,14 @@ else:
 # Ensure the data directory exists
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
+# Define writable UPLOADS_DIR (use /tmp/orion_data/uploads on Vercel)
+if IS_VERCEL:
+    UPLOADS_DIR = DATA_DIR / "uploads"
+else:
+    UPLOADS_DIR = APP_DIR / "web" / "uploads"
+
+UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+
 # Keep BASE_DIR as an alias to APP_DIR for backward compatibility
 BASE_DIR = APP_DIR
 

@@ -26,7 +26,7 @@ from database.models import (
     ExtracurricularActivity, ActivityRegistration, ConsentRequest, ParentSurvey, SurveyResponse
 )
 from database.seed import hash_password, seed_database
-from config import config, DATA_DIR, save_config
+from config import config, DATA_DIR, APP_DIR, UPLOADS_DIR, IS_VERCEL, save_config
 from utils.sms_sender import send_sms
 from utils.branch_config import get_branch_setting, set_branch_setting, get_active_year_id, get_active_term_id
 from utils.pdf_generator import (
@@ -1067,7 +1067,7 @@ async def upload_student_photo(student_id: str, file: UploadFile = File(...), us
         if not student:
             raise HTTPException(status_code=404, detail="Student not found")
         
-        uploads_dir = Path(__file__).parent / "web" / "uploads"
+        uploads_dir = UPLOADS_DIR
         uploads_dir.mkdir(parents=True, exist_ok=True)
         
         ext = os.path.splitext(file.filename)[1].lower() or ".jpg"
@@ -5059,7 +5059,7 @@ async def upload_school_logo(file: UploadFile = File(...), user=Depends(get_curr
     import shutil
     try:
         branch_id = user.get("branch_id") or 1
-        uploads_dir = Path(__file__).parent / "web" / "uploads" / f"branch_{branch_id}"
+        uploads_dir = UPLOADS_DIR / f"branch_{branch_id}"
         uploads_dir.mkdir(parents=True, exist_ok=True)
         ext = os.path.splitext(file.filename)[1].lower() or ".png"
         filename = f"school_logo{ext}"
@@ -5081,7 +5081,7 @@ async def upload_headteacher_signature(file: UploadFile = File(...), user=Depend
     import shutil
     try:
         branch_id = user.get("branch_id") or 1
-        uploads_dir = Path(__file__).parent / "web" / "uploads" / f"branch_{branch_id}"
+        uploads_dir = UPLOADS_DIR / f"branch_{branch_id}"
         uploads_dir.mkdir(parents=True, exist_ok=True)
         ext = os.path.splitext(file.filename)[1].lower() or ".png"
         filename = f"headteacher_signature{ext}"
@@ -5407,7 +5407,7 @@ def sysadmin_delete_branch(branch_id: int, user=Depends(get_current_user)):
 
         # 5. Clean up uploaded assets directory for this branch if exists
         try:
-            branch_uploads = Path(__file__).parent / "web" / "uploads" / f"branch_{branch_id}"
+            branch_uploads = UPLOADS_DIR / f"branch_{branch_id}"
             if branch_uploads.exists():
                 import shutil
                 shutil.rmtree(branch_uploads, ignore_errors=True)
@@ -6847,8 +6847,21 @@ def generate_ai_remarks(req: AIRemarkRequest, user=Depends(get_current_user)):
     finally:
         session.close()
 
-# --- Serve Static HTML App ---
-web_dir = Path(__file__).parent / "web"
+# --- Serve Uploaded Files & Static HTML App ---
+web_dir = APP_DIR / "web"
+
+@app.get("/uploads/{file_path:path}")
+@app.get("/api/uploads/{file_path:path}")
+def serve_uploads(file_path: str):
+    target_file = UPLOADS_DIR / file_path
+    if target_file.exists() and target_file.is_file():
+        return FileResponse(str(target_file))
+        
+    bundled_file = web_dir / "uploads" / file_path
+    if bundled_file.exists() and bundled_file.is_file():
+        return FileResponse(str(bundled_file))
+        
+    raise HTTPException(status_code=404, detail="File not found")
 
 @app.get("/")
 def get_index():
@@ -6858,9 +6871,8 @@ def get_index():
     return JSONResponse({"status": "error", "message": "Frontend files not found. Please create web/index.html"}, status_code=404)
 
 if web_dir.exists():
-    (web_dir / "uploads").mkdir(parents=True, exist_ok=True)
     app.mount("/static", StaticFiles(directory=str(web_dir)), name="static")
-    for subdir in ["css", "js", "assets", "img", "uploads"]:
+    for subdir in ["css", "js", "assets", "img"]:
          sd = web_dir / subdir
          if sd.exists():
              app.mount(f"/{subdir}", StaticFiles(directory=str(sd)), name=f"static_{subdir}")
