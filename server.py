@@ -375,15 +375,23 @@ def login(req: LoginRequest):
         from sqlalchemy import func, or_
         clean_user = username.lower()
         clean_user_phone = normalize_phone_number(username)
-        sysadmin = m_session.query(SystemAdmin).filter(
-            SystemAdmin.is_active == True,
-            or_(
+        sysadmin = None
+        try:
+            sysadmin = m_session.query(SystemAdmin).filter(
+                SystemAdmin.is_active == True,
+                or_(
+                    func.lower(SystemAdmin.username) == clean_user,
+                    SystemAdmin.phone == username,
+                    SystemAdmin.phone == clean_user_phone
+                )
+            ).first()
+        except Exception:
+            m_session.rollback()
+            sysadmin = m_session.query(SystemAdmin).filter(
                 func.lower(SystemAdmin.username) == clean_user,
-                SystemAdmin.phone == username,
-                SystemAdmin.phone == clean_user_phone,
-                func.replace(SystemAdmin.phone, '+233', '0') == clean_user_phone
-            )
-        ).first()
+                SystemAdmin.is_active == True
+            ).first()
+
         if sysadmin and verify_password(sysadmin.password_hash, password):
             # Generate Token
             payload = {
@@ -397,6 +405,8 @@ def login(req: LoginRequest):
             }
             token = jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
             return {"token": token, "role": "System Admin", "full_name": sysadmin.full_name, "branch_id": None}
+    except Exception as sa_err:
+        print(f"SystemAdmin login check exception: {sa_err}")
     finally:
         m_session.close()
 

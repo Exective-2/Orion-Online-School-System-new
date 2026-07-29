@@ -87,21 +87,29 @@ def init_master_db() -> None:
     MasterBase.metadata.create_all(bind=engine)
 
     with engine.connect() as conn:
-        for col_def in [
+        for col_name, col_type in [
             ("system_fee", "REAL DEFAULT 0.0"),
             ("disabled_modules", "TEXT DEFAULT ''")
         ]:
             try:
-                conn.execute(text(f"ALTER TABLE branches ADD COLUMN {col_def[0]} {col_def[1]};"))
+                conn.execute(text(f"ALTER TABLE branches ADD COLUMN IF NOT EXISTS {col_name} {col_type};"))
+                conn.commit()
+            except Exception:
+                try:
+                    conn.execute(text(f"ALTER TABLE branches ADD COLUMN {col_name} {col_type};"))
+                    conn.commit()
+                except Exception:
+                    pass
+
+        try:
+            conn.execute(text("ALTER TABLE system_admins ADD COLUMN IF NOT EXISTS phone VARCHAR(30);"))
+            conn.commit()
+        except Exception:
+            try:
+                conn.execute(text("ALTER TABLE system_admins ADD COLUMN phone VARCHAR(30);"))
                 conn.commit()
             except Exception:
                 pass
-
-        try:
-            conn.execute(text("ALTER TABLE system_admins ADD COLUMN phone VARCHAR(30);"))
-            conn.commit()
-        except Exception:
-            pass
 
 
 def init_master_defaults() -> None:

@@ -819,6 +819,19 @@ function switchLoginAuthMode(mode) {
 }
 window.switchLoginAuthMode = switchLoginAuthMode;
 
+function parseApiDetailMessage(data, fallbackMsg) {
+    if (!data) return fallbackMsg;
+    if (typeof data.detail === "string" && data.detail.trim()) return data.detail;
+    if (Array.isArray(data.detail) && data.detail.length > 0) {
+        return data.detail.map(e => (typeof e === "string" ? e : e.msg || e.detail || JSON.stringify(e))).join(", ");
+    }
+    if (typeof data.detail === "object" && data.detail !== null) {
+        return data.detail.msg || JSON.stringify(data.detail);
+    }
+    if (data.message && typeof data.message === "string") return data.message;
+    return fallbackMsg;
+}
+
 function handleRequestOtp(e) {
     if (e) e.preventDefault();
     const phoneInput = document.getElementById("login-otp-phone");
@@ -841,9 +854,9 @@ function handleRequestOtp(e) {
         body: JSON.stringify({ phone })
     })
     .then(async res => {
-        const data = await res.json();
+        const data = await res.json().catch(() => ({}));
         if (!res.ok) {
-            throw new Error(data.detail || "Failed to request OTP code");
+            throw new Error(parseApiDetailMessage(data, "Failed to request OTP code"));
         }
         return data;
     })
@@ -895,9 +908,9 @@ function handleVerifyOtpSubmit(e) {
         body: JSON.stringify({ phone, otp_code: otpCode })
     })
     .then(async res => {
-        const data = await res.json();
+        const data = await res.json().catch(() => ({}));
         if (!res.ok) {
-            throw new Error(data.detail || "Invalid OTP code");
+            throw new Error(parseApiDetailMessage(data, "Invalid OTP code"));
         }
         return data;
     })
@@ -1015,7 +1028,7 @@ function handleLoginSubmit(e) {
                 return { token: pData.access_token, role: "Parent", full_name: pData.user.full_name, branch_name: pData.user.branch_name, student_id: pData.user.student_id };
             }
             const err = await res.json().catch(() => ({}));
-            throw new Error(err.detail || "Invalid username or password");
+            throw new Error(parseApiDetailMessage(err, "Invalid username or password"));
         }
         return res.json();
     })
