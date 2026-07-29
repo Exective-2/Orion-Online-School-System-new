@@ -6750,37 +6750,37 @@ document.getElementById("form-parent-pay-online")?.addEventListener("submit", (e
         });
 });
 
-document.getElementById("btn-add-branch-trigger").addEventListener("click", () => {
+document.getElementById("btn-add-branch-trigger")?.addEventListener("click", () => {
      syncDisabledModulesToToggles("add-branch-module-toggles", "");
-     document.getElementById("modal-add-branch").classList.add("show");
+     openModal("modal-add-branch");
 });
 
-document.getElementById("form-add-branch").addEventListener("submit", (e) => {
+document.getElementById("form-add-branch")?.addEventListener("submit", (e) => {
      e.preventDefault();
      const disabledMods = syncDisabledModulesFromContainer("add-branch-module-toggles", "branch-disabled-modules");
      const payload = {
-          name: document.getElementById("branch-name").value,
-          code: document.getElementById("branch-code").value,
-          phone: document.getElementById("branch-phone").value,
-          email: document.getElementById("branch-email").value,
-          address: document.getElementById("branch-address").value,
-          notes: document.getElementById("branch-notes").value,
+          name: document.getElementById("branch-name").value.trim(),
+          code: document.getElementById("branch-code").value.trim(),
+          phone: document.getElementById("branch-phone").value.trim(),
+          email: document.getElementById("branch-email").value.trim(),
+          address: document.getElementById("branch-address").value.trim(),
+          notes: document.getElementById("branch-notes").value.trim(),
           system_fee: parseFloat(document.getElementById("branch-system-fee").value || "0"),
           disabled_modules: disabledMods,
-          head_username: document.getElementById("branch-head-username").value,
+          head_username: document.getElementById("branch-head-username").value.trim(),
           head_password: document.getElementById("branch-head-password").value,
-          head_full_name: document.getElementById("branch-head-fullname").value,
-          head_email: document.getElementById("branch-head-email").value
+          head_full_name: document.getElementById("branch-head-fullname").value.trim(),
+          head_email: document.getElementById("branch-head-email").value.trim()
      };
      
      apiFetch("/api/sysadmin/branches", { method: "POST", body: payload })
          .then(() => {
               showToast("New school branch registered and seeded successfully!", "success");
-              document.getElementById("modal-add-branch").classList.remove("show");
+              closeModal("modal-add-branch");
               document.getElementById("form-add-branch").reset();
               loadSysadmin();
          })
-         .catch(err => showToast(err.message, "error"));
+         .catch(err => showToast(parseApiDetailMessage(err, err.message || "Failed to create branch"), "error"));
 });
 
 document.getElementById("form-edit-branch")?.addEventListener("submit", (e) => {

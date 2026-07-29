@@ -5244,7 +5244,7 @@ def sysadmin_create_branch(req: BranchCreate, user=Depends(get_current_user)):
             is_active=True
         )
         m_session.add(branch_admin)
-        m_session.flush()
+        m_session.commit()
         
         branch_db_url = get_branch_db_url(branch.id, db_filename)
         token = current_db_url.set(branch_db_url)
@@ -5258,6 +5258,8 @@ def sysadmin_create_branch(req: BranchCreate, user=Depends(get_current_user)):
                 role_head = b_session.query(Role).filter(Role.name == "Admin/Headteacher").first()
                 if not role_head:
                     role_head = b_session.query(Role).filter(Role.name == "Super Admin").first()
+                if not role_head:
+                    role_head = b_session.query(Role).first()
                     
                 # Delete default seeded 'headteacher' user and staff if they exist
                 default_head = b_session.query(User).filter(User.username == "headteacher").first()
@@ -5272,7 +5274,7 @@ def sysadmin_create_branch(req: BranchCreate, user=Depends(get_current_user)):
                     username=req.head_username.strip(),
                     password_hash=hash_password(req.head_password),
                     email=req.head_email.strip() if req.head_email else None,
-                    role_id=role_head.id if role_head else None,
+                    role_id=role_head.id if role_head else 1,
                     is_active=True
                 )
                 b_session.add(custom_user)
@@ -5316,7 +5318,6 @@ def sysadmin_create_branch(req: BranchCreate, user=Depends(get_current_user)):
             current_db_url.reset(token)
             close_branch_engine(db_filename)
             
-        m_session.commit()
         record_master_audit_log(user.get("username"), "BRANCH_CREATE", branch.name, f"Registered new school branch: {branch.name} ({branch.code})")
         return {"status": "success", "branch_id": branch.id}
     except Exception as e:
