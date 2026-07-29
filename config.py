@@ -68,6 +68,19 @@ DEFAULT_CONFIG = {
         {"grade": "7", "min_score": 45.0, "remark": "Low"},
         {"grade": "8", "min_score": 40.0, "remark": "Lower"},
         {"grade": "9", "min_score": 0.0, "remark": "Lowest"}
+    ],
+    "timetable_days": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"],
+    "timetable_periods": [
+        {"name": "Period 1", "start": "08:00", "end": "08:45", "is_break": False},
+        {"name": "Period 2", "start": "08:45", "end": "09:30", "is_break": False},
+        {"name": "Period 3", "start": "09:30", "end": "10:15", "is_break": False},
+        {"name": "Morning Break", "start": "10:15", "end": "10:45", "is_break": True},
+        {"name": "Period 4", "start": "10:45", "end": "11:30", "is_break": False},
+        {"name": "Period 5", "start": "11:30", "end": "12:15", "is_break": False},
+        {"name": "Period 6", "start": "12:15", "end": "13:00", "is_break": False},
+        {"name": "Lunch Break", "start": "13:00", "end": "14:00", "is_break": True},
+        {"name": "Period 7", "start": "14:00", "end": "14:45", "is_break": False},
+        {"name": "Period 8", "start": "14:45", "end": "15:30", "is_break": False}
     ]
 }
 

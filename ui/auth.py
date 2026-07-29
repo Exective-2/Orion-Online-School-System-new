@@ -191,9 +191,10 @@ class LoginWindow(QWidget):
         try:
             from database.master_connection import get_master_session
             from database.master_models import SystemAdmin
+            from sqlalchemy import func
             session = get_master_session()
             admin = session.query(SystemAdmin).filter(
-                SystemAdmin.username == username,
+                func.lower(SystemAdmin.username) == username.lower(),
                 SystemAdmin.is_active == True
             ).first()
             if admin and verify_password(admin.password_hash, password):

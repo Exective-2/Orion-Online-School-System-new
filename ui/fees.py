@@ -206,11 +206,45 @@ class FeesPanel(QWidget):
         self.fee_table.setRowCount(0)
         session = get_session()
         try:
+            try:
+                from database.master_connection import get_master_session
+                from database.master_models import Branch
+                m_session = get_master_session()
+                try:
+                    br_obj = m_session.query(Branch).first()
+                    if br_obj and (br_obj.system_fee or 0.0) > 0:
+                        y_id = config.get("active_academic_year_id", 1)
+                        t_id = config.get("active_term_id", 1)
+                        sys_fee = session.query(Fee).filter(
+                            Fee.academic_year_id == y_id,
+                            Fee.term_id == t_id,
+                            Fee.is_system_fee == True
+                        ).first()
+                        if not sys_fee:
+                            sys_fee = Fee(
+                                name="System Software Fee",
+                                amount=br_obj.system_fee,
+                                class_level="All",
+                                academic_year_id=y_id,
+                                term_id=t_id,
+                                is_system_fee=True
+                            )
+                            session.add(sys_fee)
+                            session.commit()
+                        elif sys_fee.amount != br_obj.system_fee:
+                            sys_fee.amount = br_obj.system_fee
+                            session.commit()
+                finally:
+                    m_session.close()
+            except Exception as ex:
+                print(f"Desktop sync system fee notice: {ex}")
+
             fees = session.query(Fee).all()
             self.fee_table.setRowCount(len(fees))
             for i, fee in enumerate(fees):
                 self.fee_table.setItem(i, 0, QTableWidgetItem(str(fee.id)))
-                self.fee_table.setItem(i, 1, QTableWidgetItem(fee.name))
+                fee_name = f"{fee.name} (System Fee)" if fee.is_system_fee else fee.name
+                self.fee_table.setItem(i, 1, QTableWidgetItem(fee_name))
                 self.fee_table.setItem(i, 2, QTableWidgetItem(f"{fee.amount:.2f}"))
                 self.fee_table.setItem(i, 3, QTableWidgetItem(fee.class_level))
         except Exception as e:
@@ -699,24 +733,28 @@ class LogExpenseDialog(QDialog):
     def __init__(self, user, parent_widget=None):
         super().__init__(parent_widget)
         self.user = user
-        self.setWindowTitle("Log School Expense")
-        self.setMinimumWidth(320)
+        self.setWindowTitle("Record Income / Expense Entry")
+        self.setMinimumWidth(340)
         self.init_ui()
         
     def init_ui(self):
         layout = QVBoxLayout(self)
         form_layout = QFormLayout()
         
+        self.type_combo = QComboBox()
+        self.type_combo.addItems(["Expense", "Income"])
+
         self.title_input = QLineEdit()
-        self.title_input.setPlaceholderText("e.g. Fuel for generator")
+        self.title_input.setPlaceholderText("e.g. Fuel for generator / Grant received")
         
         self.cat_combo = QComboBox()
-        self.cat_combo.addItems(["Utilities", "Maintenance", "Salaries", "Supplies", "Branding / Events", "Other"])
+        self.cat_combo.addItems(["Utilities", "Maintenance", "Salaries", "Supplies", "Tuition Fee Collection", "Grants & Donations", "Other"])
         
         self.amount_input = QLineEdit()
         self.desc_input = QLineEdit()
         
-        form_layout.addRow("Expense Title:", self.title_input)
+        form_layout.addRow("Transaction Type:", self.type_combo)
+        form_layout.addRow("Title / Item Name:", self.title_input)
         form_layout.addRow("Category:", self.cat_combo)
         form_layout.addRow("Amount (GHS):", self.amount_input)
         form_layout.addRow("Description / Details:", self.desc_input)
@@ -733,7 +771,7 @@ class LogExpenseDialog(QDialog):
         try:
             amount = float(self.amount_input.text().strip() or "0.0")
         except ValueError:
-            QMessageBox.warning(self, "Validation Error", "Invalid expense amount.")
+            QMessageBox.warning(self, "Validation Error", "Invalid amount format.")
             return
             
         if not title or amount <= 0:
@@ -742,10 +780,11 @@ class LogExpenseDialog(QDialog):
             
         session = get_session()
         try:
-            staff_id = self.user.staff_profile.id if self.user.staff_profile else None
+            staff_id = self.user.staff_profile.id if getattr(self.user, 'staff_profile', None) else None
             exp = Expense(
                 title=title,
                 category=self.cat_combo.currentText(),
+                transaction_type=self.type_combo.currentText(),
                 amount=amount,
                 description=self.desc_input.text().strip() or None,
                 recorded_by=staff_id
@@ -753,7 +792,7 @@ class LogExpenseDialog(QDialog):
             session.add(exp)
             session.commit()
             
-            QMessageBox.information(self, "Success", "Operational expense logged successfully.")
+            QMessageBox.information(self, "Success", f"Ledger {self.type_combo.currentText()} entry saved successfully.")
             self.expense_logged.emit()
             self.accept()
         except Exception as e:

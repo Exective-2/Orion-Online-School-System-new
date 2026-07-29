@@ -7,7 +7,9 @@ from database.models import (
     Role, Permission, User, AcademicYear, Term, Class, Parent, Student, 
     Staff, Subject, TeacherSubject, ClassTeacher, Attendance, Examination, 
     Result, Fee, StudentBill, Payment, Inventory, StockTransaction, 
-    LibraryBook, LibraryIssue, Announcement, AuditLog, TimetableSlot, Expense, SMSLog
+    LibraryBook, LibraryIssue, Announcement, AuditLog, TimetableSlot, Expense, SMSLog,
+    BehaviorReport, ParentMessage, PTAMeeting, ExtracurricularActivity, ActivityRegistration,
+    ConsentRequest, ParentSurvey, SurveyResponse
 )
 
 def hash_password(password: str) -> str:
@@ -553,6 +555,105 @@ def seed_database(seed_demo: bool = True):
     sms1 = SMSLog(recipient_phone="+233241002001", message_content="Orion SMS Notice: Prince Owusu was marked PRESENT today.", status="Sent", trigger_type="Attendance")
     sms2 = SMSLog(recipient_phone="+233241002002", message_content="Orion SMS Notice: Grace Owusu was marked PRESENT today.", status="Sent", trigger_type="Attendance")
     session.add_all([sms1, sms2])
+
+    # 19. Parent Portal Demo Data (Behavior, Messaging, PTA, Activities, Consent, Surveys)
+    stud_1 = session.query(Student).first()
+    par_1 = session.query(Parent).first()
+    if stud_1 and par_1:
+        # Behavior reports
+        b1 = BehaviorReport(
+            student_id=stud_1.id,
+            date=datetime.date.today() - datetime.timedelta(days=3),
+            incident_type="Positive Feedback",
+            title="Outstanding Science Project Presentation",
+            description="Demonstrated impressive understanding of solar energy and team leadership during group presentation.",
+            action_taken="Awarded Academic Merit Badge",
+            reported_by_name="Mr. Kwame Appiah (Science Teacher)"
+        )
+        b2 = BehaviorReport(
+            student_id=stud_1.id,
+            date=datetime.date.today() - datetime.timedelta(days=10),
+            incident_type="Minor Infraction",
+            title="Late Arrival to Morning Assembly",
+            description="Arrived 15 minutes after assembly started due to heavy traffic.",
+            action_taken="Verbal Warning & Counseling",
+            reported_by_name="Mrs. Abena Ofori (Form Tutor)"
+        )
+        session.add_all([b1, b2])
+
+        # Messages
+        m1 = ParentMessage(
+            parent_id=par_1.id,
+            student_id=stud_1.id,
+            sender_type="Parent",
+            recipient_role="Teacher",
+            recipient_name="Mr. Kwame Appiah",
+            subject="Inquiry regarding Mid-Term Science Project",
+            message="Good day Mr. Appiah, I wanted to confirm if the project report deadline is extended for next week?",
+            reply="Good day! Yes, all students have been given until Wednesday next week to submit final project drafts.",
+            is_read=True
+        )
+        session.add(m1)
+
+        # PTA Meetings
+        pta1 = PTAMeeting(
+            title="Q3 Parent-Teacher Virtual Conference & Academic Review",
+            description="Individual & general discussions on terminal assessment, infrastructure updates, and e-learning resources.",
+            meeting_date=datetime.date.today() + datetime.timedelta(days=5),
+            meeting_time="15:00 GMT",
+            meeting_link="https://meet.google.com/ori-pta-2026",
+            target_class_name="All Classes",
+            organizer_name="Headmaster & PTA Chairman",
+            status="Scheduled"
+        )
+        session.add(pta1)
+
+        # Extracurricular Activities
+        act1 = ExtracurricularActivity(
+            title="Robotics & Coding Club",
+            category="Clubs & STEM",
+            description="Hands-on micro-controller programming, Python basics, and robot building.",
+            schedule_info="Wednesdays 3:30 PM - 5:00 PM",
+            fee=150.0,
+            max_capacity=30
+        )
+        act2 = ExtracurricularActivity(
+            title="Junior Football Academy",
+            category="Sports",
+            description="Coaching sessions, teamwork drills, and friendly inter-school matches.",
+            schedule_info="Fridays 4:00 PM - 5:30 PM",
+            fee=100.0,
+            max_capacity=40
+        )
+        session.add_all([act1, act2])
+        session.flush()
+
+        reg1 = ActivityRegistration(
+            activity_id=act1.id,
+            student_id=stud_1.id,
+            parent_id=par_1.id,
+            status="Registered"
+        )
+        session.add(reg1)
+
+        # Consent Request
+        cr1 = ConsentRequest(
+            title="Educational Field Trip to Kakum National Park & Cape Coast Castle",
+            description="Annual geography and history excursion including guided canopy walk and historical tour.",
+            event_date=datetime.date.today() + datetime.timedelta(days=14),
+            fee_amount=250.0,
+            student_id=stud_1.id,
+            parent_id=par_1.id,
+            consent_status="Pending"
+        )
+        session.add(cr1)
+
+        # Parent Survey
+        surv1 = ParentSurvey(
+            title="Parent Satisfaction Survey - Academic & Facilities Support",
+            description="Please share your feedback on school communication, safety, and academic progress this term."
+        )
+        session.add(surv1)
         
     # 15. Audit Logs
     audit = AuditLog(

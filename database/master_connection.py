@@ -67,10 +67,22 @@ def get_master_session():
 
 def init_master_db() -> None:
     """Create all master-DB tables if they do not already exist."""
+    from sqlalchemy import text
     # Import models here to ensure they are registered against MasterBase
     import database.master_models  # noqa: F401 — side-effect import
     engine = get_master_engine()
     MasterBase.metadata.create_all(bind=engine)
+
+    with engine.connect() as conn:
+        for col_def in [
+            ("system_fee", "REAL DEFAULT 0.0"),
+            ("disabled_modules", "TEXT DEFAULT ''")
+        ]:
+            try:
+                conn.execute(text(f"ALTER TABLE branches ADD COLUMN {col_def[0]} {col_def[1]};"))
+                conn.commit()
+            except Exception:
+                pass
 
 
 def init_master_defaults() -> None:
@@ -93,7 +105,8 @@ def init_master_defaults() -> None:
     session = get_master_session()
     try:
         # --- 1. Default System Admin ---
-        if not session.query(SystemAdmin).first():
+        from sqlalchemy import func
+        if not session.query(SystemAdmin).filter(func.lower(SystemAdmin.username) == "sysadmin").first():
             sysadmin = SystemAdmin(
                 username="sysadmin",
                 password_hash=hash_password("sysadmin123"),
@@ -119,6 +132,22 @@ def init_master_defaults() -> None:
                 )
                 session.add(branch1)
                 session.flush()
+
+        # --- 3. Default Global SMS Gateway (Arkesel) ---
+        from database.master_models import GlobalSMSGateway
+        gw = session.query(GlobalSMSGateway).filter(GlobalSMSGateway.is_active == True).first()
+        if not gw:
+            gw = GlobalSMSGateway(
+                provider="Arkesel",
+                sender_id="ORION",
+                api_key="anNWZXJJaFVZS3FtZUNSWmtwVVc",
+                is_active=True
+            )
+            session.add(gw)
+        elif gw and not gw.api_key:
+            gw.api_key = "anNWZXJJaFVZS3FtZUNSWmtwVVc"
+            gw.provider = "Arkesel"
+            gw.sender_id = "ORION"
 
         session.commit()
     except Exception as e:

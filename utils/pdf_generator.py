@@ -8,8 +8,9 @@ from reportlab.lib import colors
 from reportlab.lib.units import inch, mm
 
 from database.connection import get_session
-from database.models import Student, Parent, Class, Payment, StudentBill, Examination, Result, AcademicYear, Term, Subject, Fee, Staff, Expense, StudentReportRemark
+from database.models import Student, Parent, Class, Payment, StudentBill, Examination, Result, AcademicYear, Term, Subject, Fee, Staff, Expense, StudentReportRemark, ClassResultApproval
 from config import config
+from utils.branch_config import get_branch_setting, get_active_year_id, get_active_term_id
 
 # Output folder for PDFs — resolved lazily so mkdir() never runs at import time
 # (running mkdir at import time crashes the app if the path is not yet writable)
@@ -27,18 +28,24 @@ def _get_pdf_dir() -> Path:
 def add_pdf_header(story, title_text=None):
     from reportlab.platypus import Image
     
-    logo_path = config.get("school_logo", "")
-    if logo_path and os.path.isabs(logo_path):
-        logo_file = logo_path
+    logo_path = get_branch_setting("school_logo", "")
+    if logo_path:
+        if os.path.isabs(logo_path):
+            logo_file = logo_path
+        else:
+            clean_logo = logo_path.lstrip("/")
+            logo_file = os.path.join(os.path.dirname(os.path.dirname(__file__)), "web", clean_logo)
+            if not os.path.exists(logo_file):
+                logo_file = os.path.join(os.path.dirname(os.path.dirname(__file__)), clean_logo)
     else:
-        logo_file = os.path.join(os.path.dirname(os.path.dirname(__file__)), logo_path) if logo_path else ""
-    logo_exists = logo_path and os.path.exists(logo_file)
+        logo_file = ""
+    logo_exists = bool(logo_file and os.path.exists(logo_file))
     
-    school_name = config.get("school_name", "Orion School System")
-    school_motto = config.get("school_motto", "Knowledge, Integrity, Excellence")
-    school_phone = config.get("school_phone", "")
-    school_email = config.get("school_email", "")
-    school_address = config.get("school_address", "")
+    school_name = get_branch_setting("school_name", "Orion School System")
+    school_motto = get_branch_setting("school_motto", "Knowledge, Integrity, Excellence")
+    school_phone = get_branch_setting("school_phone", "")
+    school_email = get_branch_setting("school_email", "")
+    school_address = get_branch_setting("school_address", "")
     
     # Styles
     name_style = ParagraphStyle(
@@ -173,28 +180,64 @@ def generate_student_id_card(student_id: str, output_path: str = None) -> tuple[
         
         story = []
         
-        school_name = config.get("school_name", "Orion School System")
+        school_name = get_branch_setting("school_name", "Orion School System")
         story.append(Paragraph(school_name.upper(), title_style))
         story.append(Spacer(1, 2*mm))
         
-        # Grid details: photo placeholder on left, details on right
-        details = [
-            [Paragraph("<b>STUDENT ID CARD</b>", ParagraphStyle('Sub', parent=body_style, fontName='Helvetica-Bold', fontSize=8, alignment=1)), ""],
+        from reportlab.platypus import Image
+        photo_width = 18 * mm
+        photo_height = 22 * mm
+        
+        photo_element = None
+        if student.photo_path:
+            full_photo_path = Path(__file__).parent.parent / "web" / student.photo_path
+            if full_photo_path.exists():
+                try:
+                    photo_element = Image(str(full_photo_path), width=photo_width, height=photo_height)
+                except Exception:
+                    pass
+                    
+        if not photo_element:
+            photo_element = Table([["PHOTO"]], colWidths=[photo_width], rowHeights=[photo_height])
+            photo_element.setStyle(TableStyle([
+                ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+                ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+                ('BACKGROUND', (0,0), (-1,-1), colors.HexColor("#e2e8f0")),
+                ('TEXTCOLOR', (0,0), (-1,-1), colors.HexColor("#94a3b8")),
+                ('FONTNAME', (0,0), (-1,-1), 'Helvetica-Bold'),
+                ('FONTSIZE', (0,0), (-1,-1), 6),
+                ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor("#cbd5e1")),
+            ]))
+
+        details_data = [
             [Paragraph("Name:", body_style), Paragraph(f"<b>{student.first_name} {student.last_name}</b>", body_style)],
-            [Paragraph("Student ID:", body_style), Paragraph(f"<b>{student.id}</b>", body_style)],
+            [Paragraph("ID:", body_style), Paragraph(f"<b>{student.id}</b>", body_style)],
             [Paragraph("Class:", body_style), Paragraph(student.class_assigned.name if student.class_assigned else "Unassigned", body_style)],
             [Paragraph("Gender:", body_style), Paragraph(student.gender, body_style)],
-            [Paragraph("Emergency Call:", body_style), Paragraph(student.emergency_contact_phone or "N/A", body_style)]
+            [Paragraph("Emerg:", body_style), Paragraph(student.emergency_contact_phone or "N/A", body_style)]
         ]
-        
-        t = Table(details, colWidths=[20*mm, 55*mm])
-        t.setStyle(TableStyle([
+        t_details = Table(details_data, colWidths=[10*mm, 43*mm])
+        t_details.setStyle(TableStyle([
             ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-            ('SPAN', (0,0), (1,0)),
             ('BOTTOMPADDING', (0,0), (-1,-1), 1),
             ('TOPPADDING', (0,0), (-1,-1), 1),
+            ('LEFTPADDING', (0,0), (-1,-1), 2),
+            ('RIGHTPADDING', (0,0), (-1,-1), 2),
         ]))
-        story.append(t)
+        
+        grid_data = [
+            [Paragraph("<b>STUDENT ID CARD</b>", ParagraphStyle('Sub', parent=body_style, fontName='Helvetica-Bold', fontSize=8, alignment=1)), ""],
+            [photo_element, t_details]
+        ]
+        t_grid = Table(grid_data, colWidths=[20*mm, 55*mm])
+        t_grid.setStyle(TableStyle([
+            ('SPAN', (0,0), (1,0)),
+            ('VALIGN', (0,0), (-1,-1), 'TOP'),
+            ('BOTTOMPADDING', (0,0), (-1,-1), 1),
+            ('TOPPADDING', (0,0), (-1,-1), 1),
+            ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+        ]))
+        story.append(t_grid)
         
         doc.build(story)
         session.close()
@@ -277,11 +320,47 @@ def generate_admission_form(student_id: str, output_path: str = None) -> tuple[b
             [Paragraph("<b>Emergency Contacts:</b>", body_style), Paragraph(f"{student.emergency_contact_name or 'N/A'} ({student.emergency_contact_phone or 'N/A'})", body_style)]
         ]
         
-        t_stud = Table(student_details, colWidths=[2.5*inch, 4.5*inch])
-        t_stud.setStyle(TableStyle([
+        from reportlab.platypus import Image
+        photo_width = 1.4 * inch
+        photo_height = 1.7 * inch
+        
+        photo_element = None
+        if student.photo_path:
+            full_photo_path = Path(__file__).parent.parent / "web" / student.photo_path
+            if full_photo_path.exists():
+                try:
+                    photo_element = Image(str(full_photo_path), width=photo_width, height=photo_height)
+                except Exception:
+                    pass
+                    
+        if not photo_element:
+            photo_element = Table([["PASSPORT PHOTO"]], colWidths=[photo_width], rowHeights=[photo_height])
+            photo_element.setStyle(TableStyle([
+                ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+                ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+                ('BACKGROUND', (0,0), (-1,-1), colors.HexColor("#f1f5f9")),
+                ('TEXTCOLOR', (0,0), (-1,-1), colors.HexColor("#94a3b8")),
+                ('FONTNAME', (0,0), (-1,-1), 'Helvetica-Bold'),
+                ('FONTSIZE', (0,0), (-1,-1), 8),
+                ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor("#cbd5e1")),
+            ]))
+            
+        t_details = Table(student_details, colWidths=[2.0*inch, 3.0*inch])
+        t_details.setStyle(TableStyle([
             ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor("#e2e8f0")),
-            ('PADDING', (0,0), (-1,-1), 6),
+            ('PADDING', (0,0), (-1,-1), 5),
             ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+        ]))
+        
+        outer_data = [
+            [t_details, photo_element]
+        ]
+        t_stud = Table(outer_data, colWidths=[5.0*inch, 1.7*inch])
+        t_stud.setStyle(TableStyle([
+            ('VALIGN', (0,0), (-1,-1), 'TOP'),
+            ('ALIGN', (1,0), (1,0), 'RIGHT'),
+            ('BOTTOMPADDING', (0,0), (-1,-1), 0),
+            ('TOPPADDING', (0,0), (-1,-1), 0),
         ]))
         story.append(t_stud)
         
@@ -370,18 +449,28 @@ def generate_fee_receipt(payment_id: int, output_path: str = None) -> tuple[bool
         
         student = payment.student_bill.student
         bill = payment.student_bill
-        outstanding = bill.amount_billed - bill.amount_paid
+        outstanding = max(0.0, bill.amount_billed - bill.amount_paid)
         
+        fee_name = bill.fee.name if (bill and bill.fee) else "Fee Item"
+        is_arrears = "arrears" in fee_name.lower() or "debt brought forward" in fee_name.lower()
+        fee_type_label = "Arrears / Previous Term Debt" if is_arrears else "Current Term Bill Particular"
+
+        # Calculate student overall balance across all bills
+        all_student_bills = session.query(StudentBill).filter(StudentBill.student_id == student.id).all()
+        total_student_due = sum(max(0.0, sb.amount_billed - sb.amount_paid) for sb in all_student_bills)
+
         receipt_data = [
             [Paragraph("<b>Receipt Reference No:</b>", body_style), Paragraph(payment.reference_no or f"REC-{payment.id}", body_style)],
             [Paragraph("<b>Payment Date:</b>", body_style), Paragraph(payment.payment_date.strftime("%Y-%m-%d %H:%M"), body_style)],
             [Paragraph("<b>Student ID:</b>", body_style), Paragraph(student.id, body_style)],
             [Paragraph("<b>Student Name:</b>", body_style), Paragraph(f"{student.last_name}, {student.first_name}", body_style)],
-            [Paragraph("<b>Fee Category:</b>", body_style), Paragraph(bill.fee.name, body_style)],
-            [Paragraph("<b>Total Fee Billed:</b>", body_style), Paragraph(f"GHS {bill.amount_billed:.2f}", body_style)],
+            [Paragraph("<b>Particular Item:</b>", body_style), Paragraph(fee_name, body_style)],
+            [Paragraph("<b>Bill Classification:</b>", body_style), Paragraph(f"<b>{fee_type_label}</b>", ParagraphStyle('FType', parent=body_style, textColor=colors.HexColor("#dc2626") if is_arrears else colors.HexColor("#2563eb")))],
+            [Paragraph("<b>Particular Amount Billed:</b>", body_style), Paragraph(f"GHS {bill.amount_billed:.2f}", body_style)],
             [Paragraph("<b>Amount Paid in this Tx:</b>", body_style), Paragraph(f"GHS {payment.amount:.2f}", ParagraphStyle('PAmt', parent=body_style, fontName='Helvetica-Bold', textColor=colors.HexColor("#10b981")))],
-            [Paragraph("<b>Cumulative Total Paid:</b>", body_style), Paragraph(f"GHS {bill.amount_paid:.2f}", body_style)],
-            [Paragraph("<b>Remaining Outstanding:</b>", body_style), Paragraph(f"GHS {outstanding:.2f}", ParagraphStyle('OAmt', parent=body_style, fontName='Helvetica-Bold', textColor=colors.HexColor("#ef4444")))],
+            [Paragraph("<b>Particular Paid to Date:</b>", body_style), Paragraph(f"GHS {bill.amount_paid:.2f}", body_style)],
+            [Paragraph("<b>Particular Outstanding:</b>", body_style), Paragraph(f"GHS {outstanding:.2f}", ParagraphStyle('OAmt', parent=body_style, fontName='Helvetica-Bold', textColor=colors.HexColor("#ef4444")))],
+            [Paragraph("<b>Net Total Balance Remaining:</b>", body_style), Paragraph(f"<b>GHS {total_student_due:.2f}</b>", ParagraphStyle('NetAmt', parent=body_style, fontName='Helvetica-Bold', fontSize=11, textColor=colors.HexColor("#dc2626")))],
             [Paragraph("<b>Payment Mode:</b>", body_style), Paragraph(payment.payment_method, body_style)]
         ]
         
@@ -413,6 +502,15 @@ def generate_report_card(student_id: str, examination_id: int, output_path: str 
         
         if not student or not exam:
             return False, "Student or Examination session not found."
+
+        approval = session.query(ClassResultApproval).filter(
+            ClassResultApproval.class_id == student.class_id,
+            ClassResultApproval.academic_year_id == exam.academic_year_id,
+            ClassResultApproval.term_id == exam.term_id
+        ).first()
+
+        if not approval or approval.status not in ["Approved", "Published"]:
+            return False, "Class results have not yet been approved by the headteacher. Please review and approve results before generating report cards."
             
         file_path = Path(output_path) if output_path else _get_pdf_dir() / f"report_card_{student_id}_exam_{examination_id}.pdf"
         
@@ -501,10 +599,47 @@ def generate_report_card(student_id: str, examination_id: int, output_path: str 
             [Paragraph(f"<b>Class Stream:</b> {cls_name}", body_style), Paragraph(f"<b>Academic Session:</b> {exam.academic_year.name} - {exam.term.name}", body_style)],
             [Paragraph(f"<b>Class Position:</b> {pos_text}", body_style), Paragraph(f"<b>Average Score:</b> {student_avg:.1f}%", body_style)]
         ]
-        t_meta = Table(meta_data, colWidths=[3.5*inch, 3.5*inch])
-        t_meta.setStyle(TableStyle([
+        from reportlab.platypus import Image
+        photo_width = 1.1 * inch
+        photo_height = 1.3 * inch
+        
+        photo_element = None
+        if student.photo_path:
+            full_photo_path = Path(__file__).parent.parent / "web" / student.photo_path
+            if full_photo_path.exists():
+                try:
+                    photo_element = Image(str(full_photo_path), width=photo_width, height=photo_height)
+                except Exception:
+                    pass
+                    
+        if not photo_element:
+            photo_element = Table([["PHOTO"]], colWidths=[photo_width], rowHeights=[photo_height])
+            photo_element.setStyle(TableStyle([
+                ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+                ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+                ('BACKGROUND', (0,0), (-1,-1), colors.HexColor("#f1f5f9")),
+                ('TEXTCOLOR', (0,0), (-1,-1), colors.HexColor("#94a3b8")),
+                ('FONTNAME', (0,0), (-1,-1), 'Helvetica-Bold'),
+                ('FONTSIZE', (0,0), (-1,-1), 8),
+                ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor("#cbd5e1")),
+            ]))
+            
+        t_meta_details = Table(meta_data, colWidths=[2.6*inch, 2.7*inch])
+        t_meta_details.setStyle(TableStyle([
             ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor("#cbd5e1")),
-            ('PADDING', (0,0), (-1,-1), 6),
+            ('PADDING', (0,0), (-1,-1), 5),
+            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+        ]))
+        
+        outer_meta_data = [
+            [t_meta_details, photo_element]
+        ]
+        t_meta = Table(outer_meta_data, colWidths=[5.4*inch, 1.3*inch])
+        t_meta.setStyle(TableStyle([
+            ('VALIGN', (0,0), (-1,-1), 'TOP'),
+            ('ALIGN', (1,0), (1,0), 'RIGHT'),
+            ('BOTTOMPADDING', (0,0), (-1,-1), 0),
+            ('TOPPADDING', (0,0), (-1,-1), 0),
         ]))
         story.append(t_meta)
         story.append(Spacer(1, 15))
@@ -574,10 +709,13 @@ def generate_report_card(student_id: str, examination_id: int, output_path: str 
         
         teacher_remark_val = remark_rec.teacher_remark if (remark_rec and remark_rec.teacher_remark) else "Promising performance. Shows diligence and effort. Keep up the high standard."
         headteacher_remark_val = remark_rec.headteacher_remark if (remark_rec and remark_rec.headteacher_remark) else "Satisfactory progress made during the term. Approved for promotional transition."
+        student_interest_val = remark_rec.student_interest if (remark_rec and remark_rec.student_interest) else "N/A"
+        attitude_val = remark_rec.attitude_score if (remark_rec and remark_rec.attitude_score) else "Very Good"
 
         summary_block = [
             [Paragraph(f"<b>Overall Academic Performance Summary:</b>", ParagraphStyle('SBold', parent=body_style, fontName='Helvetica-Bold')), ""],
             [Paragraph(overall_gpa_text, body_style), ""],
+            [Paragraph(f"<b>Student Interest / Hobbies:</b> {student_interest_val} | <b>Conduct / Attitude:</b> {attitude_val}", body_style), ""],
             [Paragraph(f"<b>Class Teacher Remarks:</b> {teacher_remark_val}", body_style), ""],
             [Paragraph(f"<b>Headteacher Remarks:</b> {headteacher_remark_val}", body_style), ""]
         ]
@@ -587,17 +725,138 @@ def generate_report_card(student_id: str, examination_id: int, output_path: str 
             ('SPAN', (0,1), (1,1)),
             ('SPAN', (0,2), (1,2)),
             ('SPAN', (0,3), (1,3)),
+            ('SPAN', (0,4), (1,4)),
             ('PADDING', (0,0), (-1,-1), 4),
         ]))
         story.append(t_sum)
         
+        # --- NEXT ACADEMIC TERM FEE BILL & ARREARS STATEMENT ATTACHMENT ---
+        story.append(Spacer(1, 10))
+        
+        # 1. Calculate student existing outstanding arrears across all bills
+        all_student_bills = session.query(StudentBill).filter(StudentBill.student_id == student.id).all()
+        student_arrears = sum(max(0.0, sb.amount_billed - sb.amount_paid) for sb in all_student_bills)
+
+        # 2. Determine Next Term / Academic Year Fee Structure items for student class
+        active_year_id = get_active_year_id(session)
+        active_term_id = get_active_term_id(session)
+        next_term_id = active_term_id + 1 if active_term_id < 3 else 1
+        next_year_id = active_year_id + 1 if active_term_id >= 3 else active_year_id
+
+        cls_level = student.class_assigned.level if (student.class_assigned and student.class_assigned.level) else "All"
+        
+        next_fees = session.query(Fee).filter(
+            Fee.academic_year_id == next_year_id,
+            Fee.term_id == next_term_id
+        ).all()
+
+        if not next_fees:
+            next_fees = session.query(Fee).filter(
+                Fee.academic_year_id == active_year_id,
+                Fee.term_id == active_term_id,
+                Fee.name != "Arrears / Debt Brought Forward"
+            ).all()
+
+        fee_items = []
+        next_term_subtotal = 0.0
+        for f in next_fees:
+            if "arrears" in f.name.lower() or "debt brought forward" in f.name.lower():
+                continue
+            if f.class_level in ["All", cls_level]:
+                fee_items.append((f.name, f.amount))
+                next_term_subtotal += f.amount
+
+        fee_section_title = ParagraphStyle('FeeSecTitle', parent=body_style, fontName='Helvetica-Bold', textColor=colors.HexColor("#2563eb"), fontSize=10, spaceBefore=6, spaceAfter=4)
+        story.append(Paragraph("<b>NEXT ACADEMIC TERM / YEAR FEE BILL & ARREARS STATEMENT</b>", fee_section_title))
+
+        fee_table_rows = [
+            [
+                Paragraph("<b>Fee Particular Description</b>", ParagraphStyle('FTH1', parent=th_style, textColor=colors.white, fontSize=9)),
+                Paragraph("<b>Classification</b>", ParagraphStyle('FTH2', parent=th_style, textColor=colors.white, fontSize=9)),
+                Paragraph("<b>Amount (GHS)</b>", ParagraphStyle('FTH3', parent=th_style, textColor=colors.white, fontSize=9, alignment=2))
+            ]
+        ]
+
+        if fee_items:
+            for item_name, item_amt in fee_items:
+                fee_table_rows.append([
+                    Paragraph(item_name, body_style),
+                    Paragraph("Current Term Bill", body_style),
+                    Paragraph(f"{item_amt:.2f}", ParagraphStyle('FAmt', parent=body_style, alignment=2))
+                ])
+        else:
+            fee_table_rows.append([
+                Paragraph("Standard Tuition & Facility Fee", body_style),
+                Paragraph("Current Term Bill", body_style),
+                Paragraph(f"{next_term_subtotal:.2f}", ParagraphStyle('FAmt', parent=body_style, alignment=2))
+            ])
+
+        # Next Term Subtotal Row
+        fee_table_rows.append([
+            Paragraph("<b>SUBTOTAL (Next Term Billed Fees)</b>", ParagraphStyle('SubB', parent=body_style, fontName='Helvetica-Bold')),
+            Paragraph("<b>Next Term</b>", body_style),
+            Paragraph(f"<b>{next_term_subtotal:.2f}</b>", ParagraphStyle('SubA', parent=body_style, fontName='Helvetica-Bold', alignment=2))
+        ])
+
+        # Arrears Row if > 0
+        if student_arrears > 0:
+            fee_table_rows.append([
+                Paragraph("<b>⚠️ Arrears / Debt Brought Forward</b>", ParagraphStyle('ArrB', parent=body_style, fontName='Helvetica-Bold', textColor=colors.HexColor("#dc2626"))),
+                Paragraph("<b>Previous Debt</b>", ParagraphStyle('ArrC', parent=body_style, fontName='Helvetica-Bold', textColor=colors.HexColor("#dc2626"))),
+                Paragraph(f"<b>{student_arrears:.2f}</b>", ParagraphStyle('ArrA', parent=body_style, fontName='Helvetica-Bold', textColor=colors.HexColor("#dc2626"), alignment=2))
+            ])
+
+        # Net Total Payable Row
+        total_payable = next_term_subtotal + student_arrears
+        fee_table_rows.append([
+            Paragraph("<b>TOTAL PAYABLE FOR NEXT TERM</b>", ParagraphStyle('TotB', parent=body_style, fontName='Helvetica-Bold', fontSize=9.5, textColor=colors.HexColor("#1e293b"))),
+            Paragraph("<b>Net Total</b>", ParagraphStyle('TotC', parent=body_style, fontName='Helvetica-Bold', fontSize=9.5, textColor=colors.HexColor("#1e293b"))),
+            Paragraph(f"<b>GHS {total_payable:.2f}</b>", ParagraphStyle('TotA', parent=body_style, fontName='Helvetica-Bold', fontSize=10.5, textColor=colors.HexColor("#2563eb"), alignment=2))
+        ])
+
+        t_fees = Table(fee_table_rows, colWidths=[3.8*inch, 1.7*inch, 1.5*inch])
+        t_fees.setStyle(TableStyle([
+            ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#475569")),
+            ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor("#cbd5e1")),
+            ('PADDING', (0,0), (-1,-1), 4),
+            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+            ('BACKGROUND', (0,-1), (-1,-1), colors.HexColor("#eff6ff")),
+        ]))
+        story.append(t_fees)
+        
         # Signature block
-        story.append(Spacer(1, 40))
+        story.append(Spacer(1, 15))
+        sig_path = get_branch_setting("headteacher_signature", "")
+        if sig_path:
+            if os.path.isabs(sig_path):
+                sig_file = sig_path
+            else:
+                clean_sig = sig_path.lstrip("/")
+                sig_file = os.path.join(os.path.dirname(os.path.dirname(__file__)), "web", clean_sig)
+                if not os.path.exists(sig_file):
+                    sig_file = os.path.join(os.path.dirname(os.path.dirname(__file__)), clean_sig)
+        else:
+            sig_file = ""
+        sig_exists = bool(sig_file and os.path.exists(sig_file))
+
+        if sig_exists:
+            try:
+                sig_img = Image(sig_file, width=100, height=35)
+                sig_img.hAlign = 'RIGHT'
+                head_cell = [sig_img, Paragraph("_____________________________<br/><b>Headteacher Endorsement</b>", ParagraphStyle('Sig2', parent=body_style, alignment=2))]
+            except Exception:
+                head_cell = Paragraph("_____________________________<br/><b>Headteacher Endorsement</b>", ParagraphStyle('Sig2', parent=body_style, alignment=2))
+        else:
+            head_cell = Paragraph("_____________________________<br/><b>Headteacher Endorsement</b>", ParagraphStyle('Sig2', parent=body_style, alignment=2))
+
         sig_data = [
             [Paragraph("_____________________________<br/><b>Class Teacher Signature</b>", ParagraphStyle('Sig1', parent=body_style, alignment=0)),
-             Paragraph("_____________________________<br/><b>Headteacher Endorsement</b>", ParagraphStyle('Sig2', parent=body_style, alignment=2))]
+             head_cell]
         ]
         t_sig = Table(sig_data, colWidths=[3.5*inch, 3.5*inch])
+        t_sig.setStyle(TableStyle([
+            ('VALIGN', (0,0), (-1,-1), 'BOTTOM'),
+        ]))
         story.append(t_sig)
         
         doc.build(story)
@@ -606,9 +865,10 @@ def generate_report_card(student_id: str, examination_id: int, output_path: str 
     except Exception as e:
         return False, str(e)
 
-def generate_class_report_cards(class_id: int, examination_id: int, output_path: str = None) -> tuple[bool, str]:
+def generate_class_report_cards(class_id: int, examination_id: int, student_ids: list[str] = None, output_path: str = None) -> tuple[bool, str]:
     """
-    Generates a single merged PDF containing all student report cards for a class, separated by page breaks.
+    Generates a single merged PDF containing student report cards for a class, separated by page breaks.
+    If student_ids list is provided, filters to only those student IDs.
     """
     try:
         session = get_session()
@@ -617,9 +877,21 @@ def generate_class_report_cards(class_id: int, examination_id: int, output_path:
         if not cls or not exam:
             return False, "Class or Examination session not found."
             
-        students = session.query(Student).filter(Student.class_id == class_id, Student.status == "Active").all()
+        query = session.query(Student).filter(Student.class_id == class_id, Student.status == "Active")
+        if student_ids:
+            query = query.filter(Student.id.in_(student_ids))
+        students = query.all()
         if not students:
-            return False, "No active students found in this class."
+            return False, "No matching active students found in this class."
+
+        approval = session.query(ClassResultApproval).filter(
+            ClassResultApproval.class_id == class_id,
+            ClassResultApproval.academic_year_id == exam.academic_year_id,
+            ClassResultApproval.term_id == exam.term_id
+        ).first()
+
+        if not approval or approval.status not in ["Approved", "Published"]:
+            return False, "Class results have not yet been approved by the headteacher. Please review and approve results before generating report cards."
             
         file_path = Path(output_path) if output_path else _get_pdf_dir() / f"class_report_cards_class_{class_id}_exam_{examination_id}.pdf"
         
@@ -791,6 +1063,51 @@ def generate_class_report_cards(class_id: int, examination_id: int, output_path:
         doc.build(story)
         session.close()
         return True, str(file_path)
+    except Exception as e:
+        return False, str(e)
+
+def generate_class_report_cards_zip(class_id: int, examination_id: int, student_ids: list[str] = None, output_path: str = None) -> tuple[bool, str]:
+    """
+    Generates individual report card PDFs for active students in a class
+    and packages them into a single downloadable ZIP archive.
+    If student_ids list is provided, packages only those students.
+    """
+    import zipfile
+    try:
+        session = get_session()
+        cls = session.query(Class).filter(Class.id == class_id).first()
+        exam = session.query(Examination).filter(Examination.id == examination_id).first()
+        if not cls or not exam:
+            return False, "Class or Examination session not found."
+
+        query = session.query(Student).filter(Student.class_id == class_id, Student.status == "Active")
+        if student_ids:
+            query = query.filter(Student.id.in_(student_ids))
+        students = query.all()
+        if not students:
+            return False, "No matching active students found in this class."
+
+        approval = session.query(ClassResultApproval).filter(
+            ClassResultApproval.class_id == class_id,
+            ClassResultApproval.academic_year_id == exam.academic_year_id,
+            ClassResultApproval.term_id == exam.term_id
+        ).first()
+
+        if not approval or approval.status not in ["Approved", "Published"]:
+            return False, "Class results have not yet been approved by the headteacher. Please review and approve results before generating report cards."
+
+        zip_file_path = Path(output_path) if output_path else _get_pdf_dir() / f"class_reports_bundle_{class_id}_exam_{examination_id}.zip"
+
+        with zipfile.ZipFile(str(zip_file_path), 'w', zipfile.ZIP_DEFLATED) as zip_file:
+            for s in students:
+                s_filename = f"Report_Card_{s.id}_{s.first_name}_{s.last_name}.pdf".replace(" ", "_")
+                s_pdf_path = _get_pdf_dir() / s_filename
+                success, path_or_err = generate_report_card(s.id, examination_id, str(s_pdf_path))
+                if success and Path(path_or_err).exists():
+                    zip_file.write(path_or_err, arcname=s_filename)
+
+        session.close()
+        return True, str(zip_file_path)
     except Exception as e:
         return False, str(e)
 
@@ -1256,10 +1573,17 @@ def generate_timetable_pdf(class_name: str, term_name: str, headers: list, rows:
             ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
         ])
         
-        t_style.add('SPAN', (1, 4), (5, 4))
-        t_style.add('BACKGROUND', (1, 4), (5, 4), colors.HexColor("#cbd5e1"))
-        t_style.add('SPAN', (1, 7), (5, 7))
-        t_style.add('BACKGROUND', (1, 7), (5, 7), colors.HexColor("#cbd5e1"))
+        for r_idx, r in enumerate(rows):
+            # Check if this row is a break (either all cells contain BREAK/LUNCH, or it's empty)
+            has_substances = False
+            for cell in r[1:]:
+                c_upper = str(cell).strip().upper()
+                if c_upper and c_upper not in ["BREAK", "LUNCH", "MORNING BREAK", "LUNCH BREAK", "FREE SLOT", ""]:
+                    has_substances = True
+                    break
+            if not has_substances and len(r) > 1:
+                t_style.add('SPAN', (1, r_idx + 1), (col_count - 1, r_idx + 1))
+                t_style.add('BACKGROUND', (1, r_idx + 1), (col_count - 1, r_idx + 1), colors.HexColor("#cbd5e1"))
         
         t.setStyle(t_style)
         story.append(t)
@@ -1399,5 +1723,92 @@ def generate_library_report_pdf(headers: list, rows: list, output_path: str = No
         doc.build(story)
         return True, str(file_path)
     except Exception as e:
+        return False, str(e)
+
+def generate_ledger_report_pdf(headers: list, rows: list, output_path: str = None) -> tuple[bool, str]:
+    """
+    Generates a landscape A4 PDF report for the Income & Expense Ledger.
+    """
+    try:
+        from reportlab.lib.pagesizes import landscape
+        file_path = Path(output_path) if output_path else _get_pdf_dir() / "income_expense_ledger.pdf"
+        doc = SimpleDocTemplate(
+            str(file_path),
+            pagesize=landscape(A4),
+            leftMargin=36,
+            rightMargin=36,
+            topMargin=36,
+            bottomMargin=36
+        )
+        styles = getSampleStyleSheet()
+        body_style = ParagraphStyle('BodyLedger', fontName='Helvetica', fontSize=8, textColor=colors.HexColor("#334155"))
+        th_style = ParagraphStyle('THLedger', parent=body_style, fontName='Helvetica-Bold', textColor=colors.white)
+        
+        story = []
+        add_pdf_header(story, "INCOME & EXPENSE LEDGER STATEMENT")
+        
+        title_style = ParagraphStyle('SubLedger', fontName='Helvetica-Bold', fontSize=10, alignment=1, textColor=colors.HexColor("#1e293b"), spaceAfter=12)
+        story.append(Paragraph(f"DATE GENERATED: {datetime.date.today().strftime('%Y-%m-%d')}", title_style))
+        
+        table_rows = [[Paragraph(f"<b>{h}</b>", th_style) for h in headers]]
+        for r in rows:
+            table_rows.append([Paragraph(str(cell), body_style) for cell in r])
+            
+        t = Table(table_rows, colWidths=[45, 65, 175, 95, 60, 75, 75, 80, 80])
+        t.setStyle(TableStyle([
+            ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#1e293b")),
+            ('ALIGN', (0,0), (-1,-1), 'LEFT'),
+            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+            ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor("#cbd5e1")),
+            ('ROWBACKGROUNDS', (0,1), (-1,-1), [colors.white, colors.HexColor("#f8fafc")])
+        ]))
+        story.append(t)
+        doc.build(story)
+        return True, str(file_path)
+    except Exception as e:
+        print(f"Error generating ledger PDF: {e}")
+        return False, str(e)
+
+def generate_balances_report_pdf(headers: list, rows: list, output_path: str = None) -> tuple[bool, str]:
+    """
+    Generates an A4 PDF report for Outstanding Fee Balances and Debtors.
+    """
+    try:
+        file_path = Path(output_path) if output_path else _get_pdf_dir() / "outstanding_balances_report.pdf"
+        doc = SimpleDocTemplate(
+            str(file_path),
+            pagesize=A4,
+            leftMargin=36,
+            rightMargin=36,
+            topMargin=36,
+            bottomMargin=36
+        )
+        styles = getSampleStyleSheet()
+        body_style = ParagraphStyle('BodyBal', fontName='Helvetica', fontSize=9, textColor=colors.HexColor("#334155"))
+        th_style = ParagraphStyle('THBal', parent=body_style, fontName='Helvetica-Bold', textColor=colors.white)
+        
+        story = []
+        add_pdf_header(story, "OUTSTANDING FEE BALANCES & DEBTORS REPORT")
+        
+        title_style = ParagraphStyle('SubBal', fontName='Helvetica-Bold', fontSize=10, alignment=1, textColor=colors.HexColor("#1e293b"), spaceAfter=12)
+        story.append(Paragraph(f"DATE GENERATED: {datetime.date.today().strftime('%Y-%m-%d')}", title_style))
+        
+        table_rows = [[Paragraph(f"<b>{h}</b>", th_style) for h in headers]]
+        for r in rows:
+            table_rows.append([Paragraph(str(cell), body_style) for cell in r])
+            
+        t = Table(table_rows, colWidths=[80, 140, 75, 75, 75, 75])
+        t.setStyle(TableStyle([
+            ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#991b1b")),
+            ('ALIGN', (0,0), (-1,-1), 'LEFT'),
+            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+            ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor("#cbd5e1")),
+            ('ROWBACKGROUNDS', (0,1), (-1,-1), [colors.white, colors.HexColor("#f8fafc")])
+        ]))
+        story.append(t)
+        doc.build(story)
+        return True, str(file_path)
+    except Exception as e:
+        print(f"Error generating balances PDF: {e}")
         return False, str(e)
 

@@ -23,6 +23,8 @@ wheels/
 
 # Database
 *.db
+*.db-wal
+*.db-shm
 *.sqlite3
 
 # OS generated files

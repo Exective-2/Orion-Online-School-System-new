@@ -98,6 +98,7 @@ class Parent(Base):
     email = Column(String(100), nullable=True)
     occupation = Column(String(100), nullable=True)
     address = Column(String(200), nullable=True)
+    password_pin = Column(String(100), nullable=True)
     
     students = relationship("Student", back_populates="parent")
 
@@ -246,6 +247,7 @@ class Fee(Base):
     class_level = Column(String(50), nullable=False)  # "All", "Kindergarten", "Primary", "JHS"
     academic_year_id = Column(Integer, ForeignKey("academic_years.id"))
     term_id = Column(Integer, ForeignKey("terms.id"))
+    is_system_fee = Column(Boolean, default=False)     # True if system software fee managed by SystemAdmin
     
     academic_year = relationship("AcademicYear", back_populates="fees")
     term = relationship("Term", back_populates="fees")
@@ -382,8 +384,11 @@ class Expense(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     title = Column(String(100), nullable=False)
-    category = Column(String(50), nullable=False)     # e.g., "Utilities", "Maintenance", "Salaries"
+    category = Column(String(50), nullable=False)     # e.g., "Utilities", "Maintenance", "Salaries", "Tuition Fee Collection"
+    transaction_type = Column(String(20), default="Expense")  # "Income" or "Expense"
     amount = Column(Float, nullable=False)
+    payment_method = Column(String(50), default="Cash")  # "Cash", "Mobile Money", "Bank Transfer", "Cheque"
+    reference_no = Column(String(100), nullable=True)
     date = Column(Date, default=datetime.date.today)
     description = Column(Text, nullable=True)
     recorded_by = Column(Integer, ForeignKey("staff.id"), nullable=True)
@@ -425,8 +430,169 @@ class StudentReportRemark(Base):
     examination_id = Column(Integer, ForeignKey("examinations.id", ondelete="CASCADE"), nullable=False)
     teacher_remark = Column(String(500), nullable=True)
     headteacher_remark = Column(String(500), nullable=True)
+    student_interest = Column(String(250), nullable=True)
+    attitude_score = Column(String(100), nullable=True)
+    overall_score = Column(Float, default=0.0)
+    average_score = Column(Float, default=0.0)
+    class_rank = Column(Integer, nullable=True)
+    total_subjects = Column(Integer, default=0)
     
     student = relationship("Student")
     examination = relationship("Examination")
+
+
+class ClassResultApproval(Base):
+    __tablename__ = "class_result_approvals"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    class_id = Column(Integer, ForeignKey("classes.id", ondelete="CASCADE"), nullable=False)
+    academic_year_id = Column(Integer, ForeignKey("academic_years.id", ondelete="CASCADE"), nullable=False)
+    term_id = Column(Integer, ForeignKey("terms.id", ondelete="CASCADE"), nullable=False)
+    status = Column(String(30), default="Draft")  # "Draft", "Pending Approval", "Approved", "Rejected"
+    submitted_by_id = Column(Integer, ForeignKey("staff.id"), nullable=True)
+    submitted_at = Column(DateTime, nullable=True)
+    approved_by_id = Column(Integer, ForeignKey("staff.id"), nullable=True)
+    approved_at = Column(DateTime, nullable=True)
+    rejection_reason = Column(String(500), nullable=True)
+    
+    class_obj = relationship("Class")
+    academic_year = relationship("AcademicYear")
+    term = relationship("Term")
+    submitted_by = relationship("Staff", foreign_keys=[submitted_by_id])
+    approved_by = relationship("Staff", foreign_keys=[approved_by_id])
+
+
+class BehaviorReport(Base):
+    __tablename__ = "behavior_reports"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    student_id = Column(String(30), ForeignKey("students.id", ondelete="CASCADE"), nullable=False)
+    date = Column(Date, default=datetime.date.today)
+    incident_type = Column(String(50), nullable=False)  # "Positive Feedback", "Minor Infraction", "Disciplinary Action", "Achievement"
+    title = Column(String(150), nullable=False)
+    description = Column(Text, nullable=False)
+    action_taken = Column(String(200), nullable=True)
+    reported_by_name = Column(String(100), default="School Staff")
+
+    student = relationship("Student")
+
+
+class ParentMessage(Base):
+    __tablename__ = "parent_messages"
+
+    id = Column(Integer, primary_key=True, index=True)
+    parent_id = Column(Integer, ForeignKey("parents.id", ondelete="CASCADE"), nullable=False)
+    student_id = Column(String(30), ForeignKey("students.id", ondelete="CASCADE"), nullable=True)
+    sender_type = Column(String(20), default="Parent")  # "Parent", "School"
+    recipient_role = Column(String(50), default="Teacher")  # "Teacher", "Headmaster", "School Admin"
+    recipient_name = Column(String(100), nullable=True)
+    subject = Column(String(150), nullable=False)
+    message = Column(Text, nullable=False)
+    reply = Column(Text, nullable=True)
+    is_read = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+    parent = relationship("Parent")
+    student = relationship("Student")
+
+
+class PTAMeeting(Base):
+    __tablename__ = "pta_meetings"
+
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String(150), nullable=False)
+    description = Column(Text, nullable=True)
+    meeting_date = Column(Date, nullable=False)
+    meeting_time = Column(String(50), nullable=False)  # e.g. "14:00 GMT"
+    meeting_link = Column(String(255), nullable=True)  # Virtual Meeting Link e.g. Google Meet / Zoom
+    target_class_name = Column(String(50), default="All Classes")
+    organizer_name = Column(String(100), default="PTA Executive & Headmaster")
+    status = Column(String(30), default="Scheduled")  # "Scheduled", "Ongoing", "Completed", "Cancelled"
+
+
+class ExtracurricularActivity(Base):
+    __tablename__ = "extracurricular_activities"
+
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String(150), nullable=False)
+    category = Column(String(50), nullable=False)  # "Sports", "Cultural", "Clubs & STEM", "Music & Arts"
+    description = Column(Text, nullable=True)
+    schedule_info = Column(String(100), nullable=True)
+    fee = Column(Float, default=0.0)
+    max_capacity = Column(Integer, default=50)
+
+    registrations = relationship("ActivityRegistration", back_populates="activity", cascade="all, delete-orphan")
+
+
+class ActivityRegistration(Base):
+    __tablename__ = "activity_registrations"
+
+    id = Column(Integer, primary_key=True, index=True)
+    activity_id = Column(Integer, ForeignKey("extracurricular_activities.id", ondelete="CASCADE"), nullable=False)
+    student_id = Column(String(30), ForeignKey("students.id", ondelete="CASCADE"), nullable=False)
+    parent_id = Column(Integer, ForeignKey("parents.id", ondelete="CASCADE"), nullable=True)
+    registered_at = Column(DateTime, default=datetime.datetime.utcnow)
+    status = Column(String(30), default="Registered")
+
+    activity = relationship("ExtracurricularActivity", back_populates="registrations")
+    student = relationship("Student")
+    parent = relationship("Parent")
+
+
+class ConsentRequest(Base):
+    __tablename__ = "consent_requests"
+
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String(150), nullable=False)
+    description = Column(Text, nullable=False)
+    event_date = Column(Date, nullable=True)
+    fee_amount = Column(Float, default=0.0)
+    student_id = Column(String(30), ForeignKey("students.id", ondelete="CASCADE"), nullable=False)
+    parent_id = Column(Integer, ForeignKey("parents.id", ondelete="CASCADE"), nullable=True)
+    consent_status = Column(String(30), default="Pending")  # "Pending", "Approved", "Declined"
+    response_notes = Column(String(255), nullable=True)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+    student = relationship("Student")
+    parent = relationship("Parent")
+
+
+class ParentSurvey(Base):
+    __tablename__ = "parent_surveys"
+
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String(150), nullable=False)
+    description = Column(Text, nullable=False)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+    responses = relationship("SurveyResponse", back_populates="survey", cascade="all, delete-orphan")
+
+
+class SurveyResponse(Base):
+    __tablename__ = "survey_responses"
+
+    id = Column(Integer, primary_key=True, index=True)
+    survey_id = Column(Integer, ForeignKey("parent_surveys.id", ondelete="CASCADE"), nullable=False)
+    parent_id = Column(Integer, ForeignKey("parents.id", ondelete="CASCADE"), nullable=False)
+    student_id = Column(String(30), ForeignKey("students.id", ondelete="CASCADE"), nullable=True)
+    rating = Column(Integer, default=5)
+    feedback_text = Column(Text, nullable=True)
+    submitted_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+    survey = relationship("ParentSurvey", back_populates="responses")
+    parent = relationship("Parent")
+    student = relationship("Student")
+
+
+class SystemSetting(Base):
+    __tablename__ = "system_settings"
+
+    key = Column(String(100), primary_key=True, index=True)
+    value = Column(Text, nullable=True)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+
+
+
 
 

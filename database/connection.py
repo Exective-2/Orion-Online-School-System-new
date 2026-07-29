@@ -2,7 +2,7 @@ import contextvars
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker, declarative_base
 from sqlalchemy.pool import NullPool
-from config import get_db_url
+from config import get_db_url, DATA_DIR
 
 # Base model class
 Base = declarative_base()
@@ -45,6 +45,7 @@ def get_engine():
             
             _branch_engines[db_url] = engine
             _branch_session_makers[db_url] = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+            init_db()
             
         return _branch_engines[db_url]
 
@@ -92,13 +93,26 @@ def init_db():
     engine = get_engine()
     Base.metadata.create_all(bind=engine)
     
-    # Schema migration to add base_salary column if missing in older SQLite/Postgres setups
-    try:
-        from sqlalchemy import text
-        with engine.begin() as conn:
-            conn.execute(text("ALTER TABLE staff ADD COLUMN base_salary FLOAT DEFAULT 0.0;"))
-    except Exception:
-        pass # Column already exists or table has not been created yet
+    # Schema migration to add missing columns in older SQLite/Postgres setups
+    from sqlalchemy import text
+    with engine.begin() as conn:
+        for col_def in [
+            "ALTER TABLE staff ADD COLUMN base_salary FLOAT DEFAULT 0.0;",
+            "ALTER TABLE student_report_remarks ADD COLUMN student_interest VARCHAR(250);",
+            "ALTER TABLE student_report_remarks ADD COLUMN attitude_score VARCHAR(100);",
+            "ALTER TABLE student_report_remarks ADD COLUMN overall_score FLOAT DEFAULT 0.0;",
+            "ALTER TABLE student_report_remarks ADD COLUMN average_score FLOAT DEFAULT 0.0;",
+            "ALTER TABLE student_report_remarks ADD COLUMN class_rank INTEGER;",
+            "ALTER TABLE student_report_remarks ADD COLUMN total_subjects INTEGER DEFAULT 0;",
+            "ALTER TABLE fees ADD COLUMN is_system_fee INTEGER DEFAULT 0;",
+            "ALTER TABLE expenses ADD COLUMN transaction_type VARCHAR(20) DEFAULT 'Expense';",
+            "ALTER TABLE expenses ADD COLUMN payment_method VARCHAR(50) DEFAULT 'Cash';",
+            "ALTER TABLE expenses ADD COLUMN reference_no VARCHAR(100);"
+        ]:
+            try:
+                conn.execute(text(col_def))
+            except Exception:
+                pass
 
 def reset_engine():
     """Dispose the current engine and clear the singleton references.
@@ -115,6 +129,21 @@ def reset_engine():
             pass
     _engine = None
     _SessionLocal = None
+
+
+def close_branch_engine(db_filename: str) -> None:
+    """Dispose cached SQLAlchemy engine for a branch database file to release file locks."""
+    global _branch_engines, _branch_session_makers
+    if not db_filename:
+        return
+    db_url = f"sqlite:///{DATA_DIR}/{db_filename}"
+    engine = _branch_engines.pop(db_url, None)
+    _branch_session_makers.pop(db_url, None)
+    if engine is not None:
+        try:
+            engine.dispose()
+        except Exception:
+            pass
 
 
 def set_active_branch_db(db_path) -> None:
