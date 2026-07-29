@@ -46,8 +46,11 @@ def get_master_engine():
 
         @event.listens_for(_master_engine, "connect")
         def _set_pragmas(dbapi_conn, _record):
-            dbapi_conn.execute("PRAGMA journal_mode=WAL;")
-            dbapi_conn.execute("PRAGMA busy_timeout=5000;")
+            try:
+                dbapi_conn.execute("PRAGMA journal_mode=WAL;")
+                dbapi_conn.execute("PRAGMA busy_timeout=5000;")
+            except Exception:
+                pass
 
     return _master_engine
 

@@ -40,8 +40,11 @@ def get_engine():
             if db_url.startswith("sqlite"):
                 @event.listens_for(engine, "connect")
                 def set_wal_mode(dbapi_conn, connection_record):
-                    dbapi_conn.execute("PRAGMA journal_mode=WAL;")
-                    dbapi_conn.execute("PRAGMA busy_timeout=5000;")
+                    try:
+                        dbapi_conn.execute("PRAGMA journal_mode=WAL;")
+                        dbapi_conn.execute("PRAGMA busy_timeout=5000;")
+                    except Exception:
+                        pass
             
             _branch_engines[db_url] = engine
             _branch_session_makers[db_url] = sessionmaker(autocommit=False, autoflush=False, bind=engine)
@@ -70,8 +73,11 @@ def get_engine():
         if db_url.startswith("sqlite"):
             @event.listens_for(_engine, "connect")
             def set_wal_mode(dbapi_conn, connection_record):
-                dbapi_conn.execute("PRAGMA journal_mode=WAL;")
-                dbapi_conn.execute("PRAGMA busy_timeout=5000;")
+                try:
+                    dbapi_conn.execute("PRAGMA journal_mode=WAL;")
+                    dbapi_conn.execute("PRAGMA busy_timeout=5000;")
+                except Exception:
+                    pass
                 
     return _engine
 

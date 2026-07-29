@@ -17,9 +17,34 @@ import sys
 # Installed:    APP_DIR = install dir, DATA_DIR = %LOCALAPPDATA%\OrionSMS\
 # ---------------------------------------------------------------------------
 
+IS_VERCEL = os.environ.get("VERCEL") == "1" or os.environ.get("VERCEL_ENV") is not None
+
 if getattr(sys, 'frozen', False):
     APP_DIR = Path(sys.executable).resolve().parent
     DATA_DIR = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local")) / "OrionSMS"
+elif IS_VERCEL:
+    APP_DIR = Path(__file__).resolve().parent
+    DATA_DIR = Path("/tmp") / "orion_data"
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    
+    # Copy pre-seeded bundled database files (.db) and config.json from APP_DIR to /tmp/orion_data if missing
+    import shutil
+    for item_name in ["orion_master.db", "school_management.db", "config.json"]:
+        src_file = APP_DIR / item_name
+        dest_file = DATA_DIR / item_name
+        if src_file.exists() and not dest_file.exists():
+            try:
+                shutil.copy2(src_file, dest_file)
+            except Exception as e:
+                print(f"[VERCEL BOOTSTRAP] Error copying {item_name}: {e}")
+                
+    for branch_file in APP_DIR.glob("branch_*.db"):
+        dest_file = DATA_DIR / branch_file.name
+        if not dest_file.exists():
+            try:
+                shutil.copy2(branch_file, dest_file)
+            except Exception as e:
+                print(f"[VERCEL BOOTSTRAP] Error copying {branch_file.name}: {e}")
 else:
     APP_DIR = Path(__file__).resolve().parent
     DATA_DIR = APP_DIR
