@@ -119,7 +119,8 @@ def init_master_defaults() -> None:
     try:
         # --- 1. Default System Admin ---
         from sqlalchemy import func
-        if not session.query(SystemAdmin).filter(func.lower(SystemAdmin.username) == "sysadmin").first():
+        sysadmin = session.query(SystemAdmin).filter(func.lower(SystemAdmin.username) == "sysadmin").first()
+        if not sysadmin:
             sysadmin = SystemAdmin(
                 username="sysadmin",
                 password_hash=hash_password("sysadmin123"),
@@ -129,6 +130,12 @@ def init_master_defaults() -> None:
             )
             session.add(sysadmin)
             session.flush()
+        else:
+            from database.seed import verify_password
+            sysadmin.is_active = True
+            if not sysadmin.password_hash or not verify_password(sysadmin.password_hash, "sysadmin123"):
+                sysadmin.password_hash = hash_password("sysadmin123")
+                session.flush()
 
         # --- 2. Migrate existing single-school DB as Branch #1 ---
         if not session.query(Branch).first():

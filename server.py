@@ -372,6 +372,11 @@ def login(req: LoginRequest):
         raise HTTPException(status_code=400, detail="Username and password are required")
         
     # 1. Try System Admin Login (stored in Master DB)
+    try:
+        init_master_defaults()
+    except Exception:
+        pass
+        
     m_session = get_master_session()
     try:
         from sqlalchemy import func
