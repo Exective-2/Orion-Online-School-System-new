@@ -8,6 +8,7 @@ from PySide6.QtCore import Qt, Signal
 from config import config, save_config
 from utils.backup import create_backup, restore_backup
 from pathlib import Path
+import time
 
 from database.connection import get_session
 from database.models import User, Staff
@@ -105,13 +106,14 @@ class SettingsPanel(QWidget):
         self.load_branding_data()
         
     def load_branding_data(self):
-        self.name_input.setText(config.get("school_name", ""))
-        self.motto_input.setText(config.get("school_motto", ""))
-        self.email_input.setText(config.get("school_email", ""))
-        self.phone_input.setText(config.get("school_phone", ""))
-        self.address_input.setText(config.get("school_address", ""))
+        from utils.branch_config import get_branch_setting
+        self.name_input.setText(get_branch_setting("school_name", ""))
+        self.motto_input.setText(get_branch_setting("school_motto", ""))
+        self.email_input.setText(get_branch_setting("school_email", ""))
+        self.phone_input.setText(get_branch_setting("school_phone", ""))
+        self.address_input.setText(get_branch_setting("school_address", ""))
         
-        logo_path = config.get("school_logo", "")
+        logo_path = get_branch_setting("school_logo", "")
         if logo_path:
             self.logo_path_label.setText(Path(logo_path).name)
             self.selected_logo_path = logo_path
@@ -128,13 +130,14 @@ class SettingsPanel(QWidget):
             self.selected_logo_path = file_path
         
     def save_branding(self):
-        config["school_name"] = self.name_input.text().strip()
-        config["school_motto"] = self.motto_input.text().strip()
-        config["school_email"] = self.email_input.text().strip()
-        config["school_phone"] = self.phone_input.text().strip()
-        config["school_address"] = self.address_input.text().strip()
+        from utils.branch_config import set_branch_setting
+        set_branch_setting("school_name", self.name_input.text().strip())
+        set_branch_setting("school_motto", self.motto_input.text().strip())
+        set_branch_setting("school_email", self.email_input.text().strip())
+        set_branch_setting("school_phone", self.phone_input.text().strip())
+        set_branch_setting("school_address", self.address_input.text().strip())
         
-        # Copy selected logo to DATA_DIR if it's new
+        logo_path = ""
         if hasattr(self, 'selected_logo_path') and self.selected_logo_path:
             from config import DATA_DIR
             import shutil
@@ -142,22 +145,18 @@ class SettingsPanel(QWidget):
             src_path = self.selected_logo_path
             if not src_path.startswith(str(DATA_DIR)):
                 ext = Path(src_path).suffix
-                dest_path = DATA_DIR / f"school_logo{ext}"
+                dest_path = DATA_DIR / f"school_logo_{int(time.time())}{ext}"
                 try:
                     shutil.copy2(src_path, dest_path)
-                    config["school_logo"] = str(dest_path)
+                    logo_path = str(dest_path)
                 except Exception as e:
                     QMessageBox.warning(self, "Warning", f"Could not copy logo to data folder: {e}")
-                    config["school_logo"] = src_path
+                    logo_path = src_path
             else:
-                config["school_logo"] = src_path
-        else:
-            config["school_logo"] = ""
-            
-        if save_config(config):
-            QMessageBox.information(self, "Success", "School profile details updated successfully.")
-        else:
-            QMessageBox.critical(self, "Error", "Failed to save configuration updates.")
+                logo_path = src_path
+                
+        set_branch_setting("school_logo", logo_path)
+        QMessageBox.information(self, "Success", "School profile details updated successfully for this branch.")
 
     # --- Database Backups ---
     def init_backup_tab(self):

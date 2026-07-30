@@ -5120,15 +5120,33 @@ def update_school_profile(data: dict, user=Depends(get_current_user)):
     log_audit(user, "Update School Profile", "Updated general settings profile")
     return {"status": "success"}
 
+def resolve_current_branch_id(user: dict) -> int:
+    if user and user.get("branch_id"):
+        return int(user.get("branch_id"))
+        
+    db_url = current_db_url.get()
+    if db_url and "branch_" in db_url:
+        fname = os.path.basename(db_url)
+        try:
+            m_session = get_master_session()
+            br = m_session.query(Branch).filter(Branch.db_filename == fname).first()
+            if br:
+                m_session.close()
+                return br.id
+            m_session.close()
+        except Exception:
+            pass
+    return 1
+
 @app.post("/api/settings/upload-logo")
 async def upload_school_logo(file: UploadFile = File(...), user=Depends(get_current_user)):
     import shutil
     try:
-        branch_id = user.get("branch_id") or 1
+        branch_id = resolve_current_branch_id(user)
         uploads_dir = UPLOADS_DIR / f"branch_{branch_id}"
         uploads_dir.mkdir(parents=True, exist_ok=True)
         ext = os.path.splitext(file.filename)[1].lower() or ".png"
-        filename = f"school_logo{ext}"
+        filename = f"school_logo_{int(time.time())}{ext}"
         filepath = uploads_dir / filename
         
         with open(filepath, "wb") as buffer:
@@ -5137,7 +5155,7 @@ async def upload_school_logo(file: UploadFile = File(...), user=Depends(get_curr
         rel_path = f"uploads/branch_{branch_id}/{filename}"
         set_branch_setting("school_logo", rel_path)
         
-        log_audit(user, "Upload School Logo", "Updated school logo image")
+        log_audit(user, "Upload School Logo", f"Updated school logo image for branch {branch_id}")
         return {"status": "success", "logo_url": f"/{rel_path}?v={int(time.time())}"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -5146,11 +5164,11 @@ async def upload_school_logo(file: UploadFile = File(...), user=Depends(get_curr
 async def upload_headteacher_signature(file: UploadFile = File(...), user=Depends(get_current_user)):
     import shutil
     try:
-        branch_id = user.get("branch_id") or 1
+        branch_id = resolve_current_branch_id(user)
         uploads_dir = UPLOADS_DIR / f"branch_{branch_id}"
         uploads_dir.mkdir(parents=True, exist_ok=True)
         ext = os.path.splitext(file.filename)[1].lower() or ".png"
-        filename = f"headteacher_signature{ext}"
+        filename = f"headteacher_signature_{int(time.time())}{ext}"
         filepath = uploads_dir / filename
         
         with open(filepath, "wb") as buffer:
@@ -5159,7 +5177,7 @@ async def upload_headteacher_signature(file: UploadFile = File(...), user=Depend
         rel_path = f"uploads/branch_{branch_id}/{filename}"
         set_branch_setting("headteacher_signature", rel_path)
         
-        log_audit(user, "Upload Headteacher Signature", "Updated headteacher signature image")
+        log_audit(user, "Upload Headteacher Signature", f"Updated headteacher signature image for branch {branch_id}")
         return {"status": "success", "signature_url": f"/{rel_path}?v={int(time.time())}"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -5381,12 +5399,16 @@ def sysadmin_create_branch(req: BranchCreate, user=Depends(get_current_user)):
                 
                 # Persist branch profile settings into the new branch's system_settings table
                 set_branch_setting("school_name", req.name, session=b_session)
-                if req.phone:
-                    set_branch_setting("school_phone", req.phone, session=b_session)
-                if req.email:
-                    set_branch_setting("school_email", req.email, session=b_session)
-                if req.address:
-                    set_branch_setting("school_address", req.address, session=b_session)
+                set_branch_setting("school_phone", req.phone or "", session=b_session)
+                set_branch_setting("school_email", req.email or "", session=b_session)
+                set_branch_setting("school_address", req.address or "", session=b_session)
+                set_branch_setting("school_motto", "", session=b_session)
+                set_branch_setting("school_tagline", "", session=b_session)
+                set_branch_setting("school_logo", "", session=b_session)
+                set_branch_setting("headteacher_signature", "", session=b_session)
+                set_branch_setting("curriculum", "GES", session=b_session)
+                set_branch_setting("currency", "GHS", session=b_session)
+                set_branch_setting("theme", "dark", session=b_session)
 
                 b_session.commit()
             except Exception as b_err:

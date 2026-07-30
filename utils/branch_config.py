@@ -3,9 +3,15 @@ from database.connection import get_session
 from database.models import SystemSetting
 from config import config
 
+BRANCH_PROFILE_KEYS = {
+    "school_name", "school_motto", "school_tagline", "school_email", 
+    "school_phone", "school_address", "school_logo", "headteacher_signature", 
+    "curriculum", "currency", "theme"
+}
+
 def get_branch_setting(key: str, default=None, session=None):
     """Retrieve a setting value for the current active branch database session.
-    If JSON serialized, deserialize it; if not present in branch DB, fall back to global config default.
+    If JSON serialized, deserialize it; if not present in branch DB, return default for branch-specific keys.
     """
     close_session = False
     if session is None:
@@ -18,8 +24,15 @@ def get_branch_setting(key: str, default=None, session=None):
                 return json.loads(setting.value)
             except Exception:
                 return setting.value
+        
+        # Branch-specific branding/profile keys should NEVER inherit global config values from other branches
+        if key in BRANCH_PROFILE_KEYS:
+            return default if default is not None else ""
+
         return config.get(key, default)
     except Exception:
+        if key in BRANCH_PROFILE_KEYS:
+            return default if default is not None else ""
         return config.get(key, default)
     finally:
         if close_session:
