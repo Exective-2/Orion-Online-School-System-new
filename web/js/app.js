@@ -273,6 +273,7 @@ function parseTokenAndRoute() {
             if (parentLink) parentLink.style.display = "none";
 
             applyUserRolePermissions(payload);
+            applyRoleBasedNavigation(payload);
             switchPanel("panel-dashboard");
             updateHeaderAcademicBadge();
         }
@@ -281,7 +282,40 @@ function parseTokenAndRoute() {
     }
 }
 
-function applyUserRolePermissions(payload) {
+function isModuleDisabled(targetOrKey, disabledList) {
+    if (!disabledList || disabledList.length === 0) return false;
+    const rawKey = (targetOrKey || "").replace("panel-", "").toLowerCase().trim();
+    
+    // Alias mapping between sidebar panel target ID and toggle value keys
+    const aliasMap = {
+        "academics": ["academics"],
+        "students": ["students"],
+        "staff": ["teachers", "staff"],
+        "teachers": ["teachers", "staff"],
+        "parents": ["parents"],
+        "attendance": ["attendance"],
+        "exams": ["examination", "exams"],
+        "examination": ["examination", "exams"],
+        "result-approvals": ["approvals", "result-approvals"],
+        "approvals": ["approvals", "result-approvals"],
+        "report-cards": ["reports", "report-cards"],
+        "reports": ["reports", "report-cards"],
+        "fees": ["fees"],
+        "payroll": ["payroll"],
+        "library": ["library"],
+        "inventory": ["inventory"],
+        "timetable": ["timetable"],
+        "communication": ["communication"],
+        "settings": ["settings"]
+    };
+
+    const keysToCheck = aliasMap[rawKey] || [rawKey];
+    return keysToCheck.some(k => disabledList.includes(k));
+}
+
+window.isModuleDisabled = isModuleDisabled;
+
+function applyRoleBasedNavigation(payload) {
     if (!payload) return;
     
     const role = payload.role || "";
@@ -308,7 +342,7 @@ function applyUserRolePermissions(payload) {
         if (parentMenu) parentMenu.style.display = "none";
     }
 
-    // Hide/show sidebar links based on role specifications
+    // Hide/show sidebar links based on role specifications and branch module access controls
     document.querySelectorAll(".sidebar-nav .nav-link").forEach(link => {
         const target = link.getAttribute("data-target");
         if (!target) return;
@@ -337,9 +371,8 @@ function applyUserRolePermissions(payload) {
             visible = true;
         }
 
-        // Check if module is disabled due to unpaid system fee
-        const modKey = target.replace("panel-", "");
-        if (disabledModules.includes(modKey) && !isSysAdmin) {
+        // Check if module is disabled for this branch by System Administrator
+        if (isModuleDisabled(target, disabledModules) && !isSysAdmin) {
             visible = false;
         }
 
@@ -413,6 +446,14 @@ function switchPanel(panelId) {
         const isAdmin = currentUser.role === "Admin/Headteacher" || currentUser.role === "Super Admin" || isSysAdmin;
         const isClassTeacher = currentUser.is_class_teacher || false;
         const isTeacher = currentUser.role === "Teacher" || currentUser.role === "Subject Teacher" || isClassTeacher;
+
+        if (currentUser.disabled_modules && !isSysAdmin && panelId !== "panel-dashboard") {
+            const disabledList = currentUser.disabled_modules.toLowerCase().split(",").map(s => s.trim());
+            if (isModuleDisabled(panelId, disabledList)) {
+                showToast("This module is currently disabled for your branch by System Administration.", "warning");
+                return;
+            }
+        }
 
         if (currentUser.role === "Parent" || currentUser.role === "Student") {
             panelId = "panel-parent-portal";
