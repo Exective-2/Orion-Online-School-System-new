@@ -5573,7 +5573,10 @@ function loadBackupsTable() {
                          <td>${b.created}</td>
                      </tr>`;
              });
-        });
+        })
+        .catch(err => showToast(err.message || "Failed to load backups", "error"));
+}
+
 function updateHeaderBranding(schoolName, logoUrl) {
     const brandText = document.getElementById("header-brand-text");
     const brandIcon = document.getElementById("header-brand-icon");
