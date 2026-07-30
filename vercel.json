@@ -17,7 +17,7 @@
     },
     {
       "src": "/uploads/(.*)",
-      "dest": "web/uploads/$1"
+      "dest": "server.py"
     },
     {
       "src": "/js/(.*)",

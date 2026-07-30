@@ -5392,16 +5392,31 @@ function loadSettings() {
                  const previewImg = document.getElementById("set-logo-preview");
                  if (previewImg) {
                      previewImg.src = `${logoUrl}?v=${Date.now()}`;
+                     previewImg.style.display = "inline-block";
                      previewImg.style.opacity = "1";
                  }
                  updateHeaderBranding(profile.school_name, logoUrl);
+             } else {
+                 const previewImg = document.getElementById("set-logo-preview");
+                 if (previewImg) {
+                     previewImg.src = "";
+                     previewImg.style.display = "none";
+                 }
+                 updateHeaderBranding(profile.school_name, "");
              }
              if (profile.headteacher_signature) {
                  const sigUrl = profile.headteacher_signature.startsWith("/") ? profile.headteacher_signature : "/" + profile.headteacher_signature;
                  const sigImg = document.getElementById("set-signature-preview");
                  if (sigImg) {
                      sigImg.src = `${sigUrl}?v=${Date.now()}`;
+                     sigImg.style.display = "inline-block";
                      sigImg.style.opacity = "1";
+                 }
+             } else {
+                 const sigImg = document.getElementById("set-signature-preview");
+                 if (sigImg) {
+                     sigImg.src = "";
+                     sigImg.style.display = "none";
                  }
              }
         });
@@ -5559,8 +5574,6 @@ function loadBackupsTable() {
                      </tr>`;
              });
         });
-}
-
 function updateHeaderBranding(schoolName, logoUrl) {
     const brandText = document.getElementById("header-brand-text");
     const brandIcon = document.getElementById("header-brand-icon");
@@ -5569,30 +5582,86 @@ function updateHeaderBranding(schoolName, logoUrl) {
     if (brandText && schoolName) {
         brandText.innerText = schoolName.toUpperCase();
     }
-    if (brandLogo && logoUrl) {
-        brandLogo.src = `${logoUrl}?v=${Date.now()}`;
-        brandLogo.style.display = "inline-block";
-        if (brandIcon) brandIcon.style.display = "none";
+    if (brandLogo) {
+        if (logoUrl) {
+            brandLogo.src = `${logoUrl}?v=${Date.now()}`;
+            brandLogo.style.display = "inline-block";
+            if (brandIcon) brandIcon.style.display = "none";
+        } else {
+            brandLogo.style.display = "none";
+            if (brandIcon) brandIcon.style.display = "inline-block";
+        }
     }
 }
 
-document.getElementById("form-settings-profile")?.addEventListener("submit", (e) => {
+document.getElementById("form-settings-profile")?.addEventListener("submit", async (e) => {
     e.preventDefault();
-    const payload = {
-         school_name: document.getElementById("set-school-name").value,
-         school_motto: document.getElementById("set-school-motto").value,
-         school_tagline: document.getElementById("set-school-tagline").value,
-         school_phone: document.getElementById("set-school-phone").value,
-         school_email: document.getElementById("set-school-email").value,
-         school_address: document.getElementById("set-school-address").value
-    };
     
-    apiFetch("/api/settings/school-profile", { method: "PUT", body: payload })
-        .then(() => {
-            showToast("School configurations profile saved successfully!", "success");
-            updateHeaderBranding(payload.school_name);
-        })
-        .catch(err => showToast(err.message, "error"));
+    const submitBtn = e.target.querySelector("button[type='submit']");
+    const originalBtnHtml = submitBtn ? submitBtn.innerHTML : "";
+    if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Saving Profile...`;
+    }
+
+    try {
+        const logoFile = document.getElementById("set-logo-file")?.files[0];
+        const sigFile = document.getElementById("set-signature-file")?.files[0];
+
+        let logoUrl = null;
+
+        if (logoFile) {
+            const formData = new FormData();
+            formData.append("file", logoFile);
+            const logoRes = await apiFetch("/api/settings/upload-logo", { method: "POST", body: formData });
+            if (logoRes && logoRes.status === "success") {
+                logoUrl = logoRes.logo_url;
+                const preview = document.getElementById("set-logo-preview");
+                if (preview) {
+                    preview.src = `${logoUrl}?v=${Date.now()}`;
+                    preview.style.display = "inline-block";
+                    preview.style.opacity = "1";
+                }
+            }
+        }
+
+        if (sigFile) {
+            const formData = new FormData();
+            formData.append("file", sigFile);
+            const sigRes = await apiFetch("/api/settings/upload-signature", { method: "POST", body: formData });
+            if (sigRes && sigRes.status === "success") {
+                const sigUrl = sigRes.signature_url;
+                const preview = document.getElementById("set-signature-preview");
+                if (preview) {
+                    preview.src = `${sigUrl}?v=${Date.now()}`;
+                    preview.style.display = "inline-block";
+                    preview.style.opacity = "1";
+                }
+            }
+        }
+
+        const payload = {
+            school_name: document.getElementById("set-school-name").value,
+            school_motto: document.getElementById("set-school-motto").value,
+            school_tagline: document.getElementById("set-school-tagline").value,
+            school_phone: document.getElementById("set-school-phone").value,
+            school_email: document.getElementById("set-school-email").value,
+            school_address: document.getElementById("set-school-address").value
+        };
+
+        await apiFetch("/api/settings/school-profile", { method: "PUT", body: payload });
+        
+        showToast("School configurations profile saved successfully!", "success");
+        updateHeaderBranding(payload.school_name, logoUrl || undefined);
+        loadSettings();
+    } catch (err) {
+        showToast(err.message || "Failed to save profile settings", "error");
+    } finally {
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = originalBtnHtml || `<i class="fa-solid fa-floppy-disk"></i> Save Profile Details`;
+        }
+    }
 });
 
 document.getElementById("set-logo-file")?.addEventListener("change", (e) => {

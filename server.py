@@ -7004,14 +7004,16 @@ web_dir = APP_DIR / "web"
 @app.get("/uploads/{file_path:path}")
 @app.get("/api/uploads/{file_path:path}")
 def serve_uploads(file_path: str):
-    target_file = UPLOADS_DIR / file_path
-    if target_file.exists() and target_file.is_file():
-        return FileResponse(str(target_file))
-        
-    bundled_file = web_dir / "uploads" / file_path
-    if bundled_file.exists() and bundled_file.is_file():
-        return FileResponse(str(bundled_file))
-        
+    candidates = [
+        UPLOADS_DIR / file_path,
+        DATA_DIR / "uploads" / file_path,
+        APP_DIR / "web" / "uploads" / file_path,
+        web_dir / "uploads" / file_path
+    ]
+    for cand in candidates:
+        if cand.exists() and cand.is_file():
+            return FileResponse(str(cand))
+            
     raise HTTPException(status_code=404, detail="File not found")
 
 @app.get("/")
