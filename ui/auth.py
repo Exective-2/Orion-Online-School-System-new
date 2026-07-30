@@ -13,14 +13,8 @@ from config import config
 from ui.theme import get_theme_stylesheet
 
 
-def verify_password(stored_password: str, provided_password: str) -> bool:
-    try:
-        salt_hex, hash_hex = stored_password.split(":")
-        salt = bytes.fromhex(salt_hex)
-        pwd_hash = hashlib.pbkdf2_hmac('sha256', provided_password.encode('utf-8'), salt, 100000)
-        return pwd_hash.hex() == hash_hex
-    except Exception:
-        return False
+from database.seed import verify_password
+
 
 
 class LoginWindow(QWidget):
@@ -189,12 +183,24 @@ class LoginWindow(QWidget):
     def _try_sysadmin_login(self, username: str, password: str) -> bool:
         """Return True and emit sysadmin_login if credentials match the master system_admins table."""
         try:
-            from database.master_connection import get_master_session
+            from database.master_connection import get_master_session, init_master_defaults
             from database.master_models import SystemAdmin
-            from sqlalchemy import func
+            from server import normalize_phone_number
+            from sqlalchemy import func, or_
+            try:
+                init_master_defaults()
+            except Exception:
+                pass
+            clean_user = username.strip().lower()
+            clean_phone = normalize_phone_number(username)
             session = get_master_session()
             admin = session.query(SystemAdmin).filter(
-                func.lower(SystemAdmin.username) == username.lower(),
+                or_(
+                    func.lower(SystemAdmin.username) == clean_user,
+                    func.lower(SystemAdmin.email) == clean_user,
+                    SystemAdmin.phone == username.strip(),
+                    SystemAdmin.phone == clean_phone
+                ),
                 SystemAdmin.is_active == True
             ).first()
             if admin and verify_password(admin.password_hash, password):

@@ -380,54 +380,63 @@ def login(req: LoginRequest):
     clean_user_phone = normalize_phone_number(username)
 
     # 1. Try System Admin Login (stored in Master DB)
-    if clean_user == "sysadmin" or clean_user_phone == "0540965582" or username == "0540965582":
-        try:
-            init_master_defaults()
-        except Exception:
-            pass
-        m_session = get_master_session()
-        try:
-            sysadmin = m_session.query(SystemAdmin).filter(SystemAdmin.is_active == True).first()
-            if sysadmin and verify_password(sysadmin.password_hash, password):
-                payload = {
-                    "username": sysadmin.username,
-                    "user_id": sysadmin.id,
-                    "full_name": sysadmin.full_name,
-                    "branch_id": None,
-                    "role": "System Admin",
-                    "permissions": ["all"],
-                    "exp": datetime.datetime.utcnow() + datetime.timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-                }
-                token = jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
-                return {"token": token, "role": "System Admin", "full_name": sysadmin.full_name, "branch_id": None}
-            elif password == "sysadmin123":
-                payload = {
-                    "username": "sysadmin",
-                    "user_id": 1,
-                    "full_name": "System Administrator",
-                    "branch_id": None,
-                    "role": "System Admin",
-                    "permissions": ["all"],
-                    "exp": datetime.datetime.utcnow() + datetime.timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-                }
-                token = jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
-                return {"token": token, "role": "System Admin", "full_name": "System Administrator", "branch_id": None}
-        except Exception as sa_err:
-            print(f"SystemAdmin login check exception: {sa_err}")
-            if password == "sysadmin123":
-                payload = {
-                    "username": "sysadmin",
-                    "user_id": 1,
-                    "full_name": "System Administrator",
-                    "branch_id": None,
-                    "role": "System Admin",
-                    "permissions": ["all"],
-                    "exp": datetime.datetime.utcnow() + datetime.timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-                }
-                token = jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
-                return {"token": token, "role": "System Admin", "full_name": "System Administrator", "branch_id": None}
-        finally:
-            m_session.close()
+    try:
+        init_master_defaults()
+    except Exception:
+        pass
+    from sqlalchemy import func, or_
+    m_session = get_master_session()
+    try:
+        sysadmin = m_session.query(SystemAdmin).filter(
+            or_(
+                func.lower(SystemAdmin.username) == clean_user,
+                func.lower(SystemAdmin.email) == clean_user,
+                SystemAdmin.phone == username,
+                SystemAdmin.phone == clean_user_phone
+            ),
+            SystemAdmin.is_active == True
+        ).first()
+
+        if sysadmin and verify_password(sysadmin.password_hash, password):
+            payload = {
+                "username": sysadmin.username,
+                "user_id": sysadmin.id,
+                "full_name": sysadmin.full_name,
+                "branch_id": None,
+                "role": "System Admin",
+                "permissions": ["all"],
+                "exp": datetime.datetime.utcnow() + datetime.timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+            }
+            token = jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+            return {"token": token, "role": "System Admin", "full_name": sysadmin.full_name, "branch_id": None}
+        elif (clean_user == "sysadmin" or clean_user_phone == "0540965582" or username == "0540965582") and password == "sysadmin123":
+            payload = {
+                "username": "sysadmin",
+                "user_id": 1,
+                "full_name": "System Administrator",
+                "branch_id": None,
+                "role": "System Admin",
+                "permissions": ["all"],
+                "exp": datetime.datetime.utcnow() + datetime.timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+            }
+            token = jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+            return {"token": token, "role": "System Admin", "full_name": "System Administrator", "branch_id": None}
+    except Exception as sa_err:
+        print(f"SystemAdmin login check exception: {sa_err}")
+        if password == "sysadmin123" and (clean_user == "sysadmin" or clean_user_phone == "0540965582"):
+            payload = {
+                "username": "sysadmin",
+                "user_id": 1,
+                "full_name": "System Administrator",
+                "branch_id": None,
+                "role": "System Admin",
+                "permissions": ["all"],
+                "exp": datetime.datetime.utcnow() + datetime.timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+            }
+            token = jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+            return {"token": token, "role": "System Admin", "full_name": "System Administrator", "branch_id": None}
+    finally:
+        m_session.close()
 
     # 2. Try Branch Login
     branches = []
@@ -523,6 +532,8 @@ def request_otp(req: OTPRequest):
     if not clean_phone or len(clean_phone) < 9:
         raise HTTPException(status_code=400, detail="Valid recipient phone number is required.")
 
+    user_payload = None
+
     # Direct resolution for System Administrator phone number
     if clean_phone == "0540965582" or clean_phone == "233540965582" or clean_phone.endswith("540965582"):
         user_payload = {
@@ -544,8 +555,9 @@ def request_otp(req: OTPRequest):
                 sysadmins = m_session.query(SystemAdmin).filter(SystemAdmin.is_active == True).all()
                 for sa in sysadmins:
                     sa_phone = normalize_phone_number(getattr(sa, "phone", "") or "")
-                    sa_email = normalize_phone_number(getattr(sa, "email", "") or "")
-                    if (sa_phone and sa_phone == clean_phone) or (sa_email and sa_email == clean_phone):
+                    sa_email = (getattr(sa, "email", "") or "").lower().strip()
+                    sa_uname = (getattr(sa, "username", "") or "").lower().strip()
+                    if (sa_phone and sa_phone == clean_phone) or (sa_email and sa_email == raw_phone.lower()) or (sa_uname and sa_uname == raw_phone.lower()):
                         user_payload = {
                             "username": sa.username,
                             "user_id": sa.id,
