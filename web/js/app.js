@@ -789,23 +789,9 @@ function initGlobalEventListeners() {
             const formData = new FormData();
             formData.append("file", file);
             
-            const headers = {};
-            if (currentToken) {
-                headers["Authorization"] = `Bearer ${currentToken}`;
-            }
-            
-            fetch(`/api/students/${studentId}/photo`, {
+            apiFetch(`/api/students/${studentId}/photo`, {
                 method: "POST",
-                headers: headers,
                 body: formData
-            })
-            .then(res => {
-                if (res.status === 401) {
-                    handleLogout();
-                    throw new Error("Session expired. Logged out.");
-                }
-                if (!res.ok) throw new Error("Upload failed");
-                return res.json();
             })
             .then(data => {
                 showToast("Profile picture uploaded successfully!", "success");
@@ -5615,26 +5601,24 @@ document.getElementById("set-logo-file")?.addEventListener("change", (e) => {
     const formData = new FormData();
     formData.append("file", file);
 
-    fetch("/api/settings/upload-logo", {
+    apiFetch("/api/settings/upload-logo", {
         method: "POST",
-        headers: { "Authorization": `Bearer ${currentToken}` },
         body: formData
     })
-    .then(res => res.json())
     .then(data => {
-        if (data.status === "success") {
+        if (data && data.status === "success") {
             showToast("School logo uploaded successfully!", "success");
             const preview = document.getElementById("set-logo-preview");
             if (preview) {
-                preview.src = data.logo_url;
+                preview.src = `${data.logo_url}?v=${Date.now()}`;
                 preview.style.opacity = "1";
             }
             updateHeaderBranding(document.getElementById("set-school-name").value, data.logo_url);
         } else {
-            showToast(data.detail || "Failed to upload logo", "error");
+            showToast((data && data.detail) || "Failed to upload logo", "error");
         }
     })
-    .catch(err => showToast(err.message, "error"));
+    .catch(err => showToast(err.message || "Failed to upload logo", "error"));
 });
 
 document.getElementById("set-signature-file")?.addEventListener("change", (e) => {
@@ -5643,25 +5627,23 @@ document.getElementById("set-signature-file")?.addEventListener("change", (e) =>
     const formData = new FormData();
     formData.append("file", file);
 
-    fetch("/api/settings/upload-signature", {
+    apiFetch("/api/settings/upload-signature", {
         method: "POST",
-        headers: { "Authorization": `Bearer ${currentToken}` },
         body: formData
     })
-    .then(res => res.json())
     .then(data => {
-        if (data.status === "success") {
+        if (data && data.status === "success") {
             showToast("Headteacher signature uploaded successfully!", "success");
             const preview = document.getElementById("set-signature-preview");
             if (preview) {
-                preview.src = data.signature_url;
+                preview.src = `${data.signature_url}?v=${Date.now()}`;
                 preview.style.opacity = "1";
             }
         } else {
-            showToast(data.detail || "Failed to upload signature", "error");
+            showToast((data && data.detail) || "Failed to upload signature", "error");
         }
     })
-    .catch(err => showToast(err.message, "error"));
+    .catch(err => showToast(err.message || "Failed to upload signature", "error"));
 });
 
 document.getElementById("btn-trigger-backup-now").addEventListener("click", () => {

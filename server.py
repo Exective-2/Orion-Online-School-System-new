@@ -5120,7 +5120,13 @@ def update_school_profile(data: dict, user=Depends(get_current_user)):
     log_audit(user, "Update School Profile", "Updated general settings profile")
     return {"status": "success"}
 
-def resolve_current_branch_id(user: dict) -> int:
+def resolve_current_branch_id(user: dict, request: Optional[Request] = None) -> int:
+    if request and request.headers.get("x-branch-id"):
+        try:
+            return int(request.headers.get("x-branch-id"))
+        except ValueError:
+            pass
+
     if user and user.get("branch_id"):
         return int(user.get("branch_id"))
         
@@ -5139,10 +5145,10 @@ def resolve_current_branch_id(user: dict) -> int:
     return 1
 
 @app.post("/api/settings/upload-logo")
-async def upload_school_logo(file: UploadFile = File(...), user=Depends(get_current_user)):
+async def upload_school_logo(request: Request, file: UploadFile = File(...), user=Depends(get_current_user)):
     import shutil
     try:
-        branch_id = resolve_current_branch_id(user)
+        branch_id = resolve_current_branch_id(user, request)
         uploads_dir = UPLOADS_DIR / f"branch_{branch_id}"
         uploads_dir.mkdir(parents=True, exist_ok=True)
         ext = os.path.splitext(file.filename)[1].lower() or ".png"
@@ -5153,7 +5159,17 @@ async def upload_school_logo(file: UploadFile = File(...), user=Depends(get_curr
             shutil.copyfileobj(file.file, buffer)
             
         rel_path = f"uploads/branch_{branch_id}/{filename}"
-        set_branch_setting("school_logo", rel_path)
+        
+        b_filename = get_branch_db_filename(branch_id)
+        if b_filename:
+            b_url = get_branch_db_url(branch_id, b_filename)
+            tok = current_db_url.set(b_url)
+            try:
+                set_branch_setting("school_logo", rel_path)
+            finally:
+                current_db_url.reset(tok)
+        else:
+            set_branch_setting("school_logo", rel_path)
         
         log_audit(user, "Upload School Logo", f"Updated school logo image for branch {branch_id}")
         return {"status": "success", "logo_url": f"/{rel_path}?v={int(time.time())}"}
@@ -5161,10 +5177,10 @@ async def upload_school_logo(file: UploadFile = File(...), user=Depends(get_curr
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/settings/upload-signature")
-async def upload_headteacher_signature(file: UploadFile = File(...), user=Depends(get_current_user)):
+async def upload_headteacher_signature(request: Request, file: UploadFile = File(...), user=Depends(get_current_user)):
     import shutil
     try:
-        branch_id = resolve_current_branch_id(user)
+        branch_id = resolve_current_branch_id(user, request)
         uploads_dir = UPLOADS_DIR / f"branch_{branch_id}"
         uploads_dir.mkdir(parents=True, exist_ok=True)
         ext = os.path.splitext(file.filename)[1].lower() or ".png"
@@ -5175,7 +5191,17 @@ async def upload_headteacher_signature(file: UploadFile = File(...), user=Depend
             shutil.copyfileobj(file.file, buffer)
             
         rel_path = f"uploads/branch_{branch_id}/{filename}"
-        set_branch_setting("headteacher_signature", rel_path)
+        
+        b_filename = get_branch_db_filename(branch_id)
+        if b_filename:
+            b_url = get_branch_db_url(branch_id, b_filename)
+            tok = current_db_url.set(b_url)
+            try:
+                set_branch_setting("headteacher_signature", rel_path)
+            finally:
+                current_db_url.reset(tok)
+        else:
+            set_branch_setting("headteacher_signature", rel_path)
         
         log_audit(user, "Upload Headteacher Signature", f"Updated headteacher signature image for branch {branch_id}")
         return {"status": "success", "signature_url": f"/{rel_path}?v={int(time.time())}"}
