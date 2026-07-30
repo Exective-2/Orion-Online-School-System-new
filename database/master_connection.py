@@ -62,6 +62,8 @@ def get_master_engine():
                 try:
                     dbapi_conn.execute("PRAGMA journal_mode=WAL;")
                     dbapi_conn.execute("PRAGMA busy_timeout=5000;")
+                    dbapi_conn.execute("PRAGMA synchronous=NORMAL;")
+                    dbapi_conn.execute("PRAGMA cache_size=-64000;")
                 except Exception:
                     pass
 
@@ -217,5 +219,15 @@ def get_branch_session(db_filename: str):
         poolclass=NullPool,
         echo=False,
     )
+    @event.listens_for(tmp_engine, "connect")
+    def _set_branch_pragmas(dbapi_conn, _record):
+        try:
+            dbapi_conn.execute("PRAGMA journal_mode=WAL;")
+            dbapi_conn.execute("PRAGMA busy_timeout=5000;")
+            dbapi_conn.execute("PRAGMA synchronous=NORMAL;")
+            dbapi_conn.execute("PRAGMA cache_size=-64000;")
+        except Exception:
+            pass
+
     TmpSession = sm(autocommit=False, autoflush=False, bind=tmp_engine)
     return TmpSession()

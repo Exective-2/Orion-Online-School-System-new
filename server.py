@@ -226,7 +226,7 @@ class BranchUpdate(BaseModel):
     email: Optional[str] = ""
     system_fee: Optional[float] = 0.0
     disabled_modules: Optional[str] = ""
-    is_active: bool
+    is_active: Optional[bool] = True
     notes: Optional[str] = ""
 
 class PasswordResetRequest(BaseModel):
@@ -733,27 +733,26 @@ def run_setup(req: SetupRequest):
 def dashboard_stats(user=Depends(get_current_user)):
     session = get_session()
     try:
+        from sqlalchemy import func
         active_students = session.query(Student).filter(Student.status == "Active").count()
         staff_count = session.query(Staff).filter(Staff.status == "Active").count()
         library_books = session.query(LibraryBook).count()
         
-        # Financial summary: Total payments made
-        payments = session.query(Payment).all()
-        total_collected = sum(p.amount for p in payments)
+        # Financial summary: Total payments made via SQL sum
+        total_collected = session.query(func.coalesce(func.sum(Payment.amount), 0.0)).scalar() or 0.0
         
-        # Billing details
-        billed_sum = session.query(StudentBill.amount_billed).all()
-        paid_sum = session.query(StudentBill.amount_paid).all()
-        total_billed = sum(b[0] for b in billed_sum) if billed_sum else 0.0
-        total_paid = sum(p[0] for p in paid_sum) if paid_sum else 0.0
+        # Billing details via SQL sum
+        total_billed = session.query(func.coalesce(func.sum(StudentBill.amount_billed), 0.0)).scalar() or 0.0
+        total_paid = session.query(func.coalesce(func.sum(StudentBill.amount_paid), 0.0)).scalar() or 0.0
         total_outstanding = total_billed - total_paid
         
         # Student enrollment by class for Charts
-        classes = session.query(Class).all()
-        class_stats = []
-        for c in classes:
-            cnt = session.query(Student).filter(Student.class_id == c.id, Student.status == "Active").count()
-            class_stats.append({"class_name": c.name, "count": cnt})
+        class_counts = session.query(
+            Class.name,
+            func.count(Student.id)
+        ).outerjoin(Student, (Student.class_id == Class.id) & (Student.status == "Active"))\
+         .group_by(Class.id, Class.name).all()
+        class_stats = [{"class_name": cname, "count": cnt} for cname, cnt in class_counts]
             
         # Attendance distribution stats
         attendance_stats = {"Present": 0, "Absent": 0, "Late": 0}
@@ -761,6 +760,7 @@ def dashboard_stats(user=Depends(get_current_user)):
         t_id = get_active_term_id(session)
         
         is_teacher = user.get("role") == "Teacher"
+        att_query = session.query(Attendance.status, func.count(Attendance.id)).filter(Attendance.student_id != None)
         if is_teacher:
             user_obj = session.query(User).filter(User.id == user.get("user_id")).first()
             staff_profile = user_obj.staff_profile if user_obj else None
@@ -772,20 +772,12 @@ def dashboard_stats(user=Depends(get_current_user)):
                     ClassTeacher.term_id == t_id
                 ).first()
             if ct_record:
-                class_student_ids = [s.id for s in session.query(Student).filter(Student.class_id == ct_record.class_id).all()]
-                if class_student_ids:
-                    att_records = session.query(Attendance).filter(
-                        Attendance.student_id.in_(class_student_ids)
-                    ).all()
-                    for att in att_records:
-                        if att.status in attendance_stats:
-                            attendance_stats[att.status] += 1
-        else:
-            # School-wide attendance stats
-            att_records = session.query(Attendance).filter(Attendance.student_id != None).all()
-            for att in att_records:
-                if att.status in attendance_stats:
-                    attendance_stats[att.status] += 1
+                att_query = att_query.join(Student, Attendance.student_id == Student.id).filter(Student.class_id == ct_record.class_id)
+        
+        att_records = att_query.group_by(Attendance.status).all()
+        for status_val, cnt in att_records:
+            if status_val in attendance_stats:
+                attendance_stats[status_val] = cnt
             
         return {
             "students": active_students,
@@ -825,7 +817,8 @@ def dashboard_recent_activity(user=Depends(get_current_user)):
 def get_students(search: Optional[str] = "", class_id: Optional[int] = None, status: Optional[str] = "Active", user=Depends(get_current_user)):
     session = get_session()
     try:
-        query = session.query(Student)
+        from sqlalchemy.orm import joinedload
+        query = session.query(Student).options(joinedload(Student.class_assigned), joinedload(Student.parent))
         if search:
             query = query.filter(
                 (Student.first_name.ilike(f"%{search}%")) |
@@ -1199,7 +1192,8 @@ def get_parents(search: Optional[str] = "", user=Depends(get_current_user)):
     session = get_session()
     try:
         from sqlalchemy import or_
-        query = session.query(Parent)
+        from sqlalchemy.orm import joinedload
+        query = session.query(Parent).options(joinedload(Parent.students).joinedload(Student.class_assigned))
         if search:
             s_clean = f"%{search.strip()}%"
             query = query.filter(
@@ -1366,7 +1360,8 @@ def get_staff(search: Optional[str] = "", role: Optional[str] = "", user=Depends
     session = get_session()
     try:
         from sqlalchemy import cast, String, or_
-        query = session.query(Staff).filter(Staff.status == "Active")
+        from sqlalchemy.orm import joinedload
+        query = session.query(Staff).options(joinedload(Staff.user).joinedload(User.role)).filter(Staff.status == "Active")
         
         if search or role:
             query = query.outerjoin(User, Staff.user_id == User.id).outerjoin(Role, User.role_id == Role.id)
@@ -1754,6 +1749,63 @@ def pay_payslip(payslip_id: int, user=Depends(get_current_user)):
         
         log_audit(user, "Pay Salary", f"Paid net salary of GHS {payslip.net_salary:.2f} to {payslip.staff.first_name} {payslip.staff.last_name} for period {payslip.pay_period}")
         return {"status": "success"}
+    except Exception as e:
+        session.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        session.close()
+
+class BulkPayRequest(BaseModel):
+    pay_period: Optional[str] = None
+    payslip_ids: Optional[List[int]] = None
+
+@app.post("/api/payroll/bulk-pay")
+def bulk_pay_payroll(req: BulkPayRequest, user=Depends(get_current_user)):
+    session = get_session()
+    try:
+        from database.models import Payslip, Expense, User
+        query = session.query(Payslip).filter(Payslip.status == "Pending")
+        if req.payslip_ids:
+            query = query.filter(Payslip.id.in_(req.payslip_ids))
+        elif req.pay_period:
+            query = query.filter(Payslip.pay_period == req.pay_period)
+        else:
+            raise HTTPException(status_code=400, detail="Must specify pay_period or payslip_ids")
+            
+        pending_payslips = query.all()
+        if not pending_payslips:
+            return {"status": "success", "paid_count": 0, "total_paid_amount": 0.0, "message": "No pending payslips to process"}
+            
+        recorded_by_id = None
+        user_obj = session.query(User).filter(User.id == user.get("user_id")).first()
+        if user_obj and user_obj.staff_profile:
+            recorded_by_id = user_obj.staff_profile.id
+
+        total_amount = 0.0
+        for payslip in pending_payslips:
+            payslip.status = "Paid"
+            payslip.payment_date = datetime.date.today()
+            total_amount += payslip.net_salary
+            
+            expense = Expense(
+                title=f"Staff Salary - {payslip.staff.first_name} {payslip.staff.last_name} ({payslip.pay_period})",
+                category="Salaries",
+                amount=payslip.net_salary,
+                date=datetime.date.today(),
+                description=f"Bulk salary payout for period {payslip.pay_period} (Base: {payslip.base_salary}, Net: {payslip.net_salary})",
+                recorded_by=recorded_by_id
+            )
+            session.add(expense)
+
+        session.commit()
+        period_label = req.pay_period or f"{len(pending_payslips)} selected staff"
+        log_audit(user, "Bulk Pay Salary", f"Bulk paid {len(pending_payslips)} staff members totaling GHS {total_amount:.2f} for {period_label}")
+        return {
+            "status": "success",
+            "paid_count": len(pending_payslips),
+            "total_paid_amount": total_amount,
+            "message": f"Successfully processed bulk salary payments for {len(pending_payslips)} staff members (Total: GHS {total_amount:,.2f})"
+        }
     except Exception as e:
         session.rollback()
         raise HTTPException(status_code=500, detail=str(e))
@@ -3882,6 +3934,8 @@ def get_student_fee_particulars(student_id: str, user=Depends(get_current_user))
                 "sr": sr,
                 "bill_id": b.id,
                 "particular": fee_name,
+                "description": fee_name,
+                "amount": outstanding,
                 "amount_billed": b.amount_billed,
                 "amount_paid": b.amount_paid,
                 "due": outstanding,
@@ -5154,22 +5208,35 @@ def sysadmin_get_branches(user=Depends(get_current_user)):
     m_session = get_master_session()
     try:
         branches = m_session.query(Branch).order_by(Branch.name).all()
-        res = []
-        for b in branches:
-            students_cnt = 0
-            staff_cnt = 0
+        
+        import concurrent.futures
+        def fetch_branch_stats(b_id, db_fn):
+            stu_cnt = 0
+            stf_cnt = 0
             try:
-                b_url = get_branch_db_url(b.id, b.db_filename)
+                b_url = get_branch_db_url(b_id, db_fn)
                 token = current_db_url.set(b_url)
                 try:
                     b_sess = get_session()
-                    students_cnt = b_sess.query(Student).filter(Student.status == "Active").count()
-                    staff_cnt = b_sess.query(Staff).filter(Staff.status == "Active").count()
+                    stu_cnt = b_sess.query(Student).filter(Student.status == "Active").count()
+                    stf_cnt = b_sess.query(Staff).filter(Staff.status == "Active").count()
+                    b_sess.close()
                 finally:
                     current_db_url.reset(token)
             except Exception:
                 pass
-                    
+            return b_id, stu_cnt, stf_cnt
+
+        counts_map = {}
+        with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
+            futures = [executor.submit(fetch_branch_stats, b.id, b.db_filename) for b in branches]
+            for future in concurrent.futures.as_completed(futures):
+                b_id, stu_cnt, stf_cnt = future.result()
+                counts_map[b_id] = (stu_cnt, stf_cnt)
+
+        res = []
+        for b in branches:
+            students_cnt, staff_cnt = counts_map.get(b.id, (0, 0))
             fee_per_student = getattr(b, "system_fee", 0.0) or 0.0
             total_fee = students_cnt * fee_per_student
                     
@@ -5184,6 +5251,7 @@ def sysadmin_get_branches(user=Depends(get_current_user)):
                 "total_system_fee": total_fee,
                 "disabled_modules": getattr(b, "disabled_modules", "") or "",
                 "is_active": b.is_active,
+                "notes": getattr(b, "notes", "") or "",
                 "db_filename": b.db_filename,
                 "students": students_cnt,
                 "staff": staff_cnt
@@ -5353,13 +5421,36 @@ def sysadmin_update_branch(branch_id: int, req: BranchUpdate, user=Depends(get_c
         branch.address = req.address
         branch.phone = req.phone
         branch.email = req.email
-        branch.system_fee = req.system_fee or 0.0
+        branch.system_fee = req.system_fee if req.system_fee is not None else 0.0
         branch.disabled_modules = req.disabled_modules or ""
-        branch.is_active = req.is_active
-        branch.notes = req.notes
+        if req.is_active is not None:
+            branch.is_active = req.is_active
+        branch.notes = req.notes or ""
         
         _branch_db_cache.pop(branch_id, None)
         m_session.commit()
+
+        # Sync updated branch profile settings to the branch's SQLite DB
+        try:
+            b_url = get_branch_db_url(branch.id, branch.db_filename)
+            token = current_db_url.set(b_url)
+            try:
+                b_sess = get_session()
+                if req.name:
+                    set_branch_setting("school_name", req.name, session=b_sess)
+                if req.phone is not None:
+                    set_branch_setting("school_phone", req.phone, session=b_sess)
+                if req.email is not None:
+                    set_branch_setting("school_email", req.email, session=b_sess)
+                if req.address is not None:
+                    set_branch_setting("school_address", req.address, session=b_sess)
+                b_sess.commit()
+                b_sess.close()
+            finally:
+                current_db_url.reset(token)
+        except Exception as sync_err:
+            print(f"[sysadmin] Warning: could not sync settings to branch DB {branch.id}: {sync_err}")
+
         return {"status": "success"}
     except Exception as e:
         m_session.rollback()

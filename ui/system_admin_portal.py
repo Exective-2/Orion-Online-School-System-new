@@ -749,6 +749,30 @@ class SystemAdminPortal(QMainWindow):
             branch.email = data["email"]
             branch.notes = data.get("notes", "")
             session.commit()
+
+            # Sync updated profile info to individual branch DB
+            try:
+                from database.connection import get_branch_db_url, current_db_url, get_session
+                from utils.branch_config import set_branch_setting
+                b_url = get_branch_db_url(branch.id, branch.db_filename)
+                token = current_db_url.set(b_url)
+                try:
+                    b_sess = get_session()
+                    if data["name"]:
+                        set_branch_setting("school_name", data["name"], session=b_sess)
+                    if data["phone"]:
+                        set_branch_setting("school_phone", data["phone"], session=b_sess)
+                    if data["email"]:
+                        set_branch_setting("school_email", data["email"], session=b_sess)
+                    if data["address"]:
+                        set_branch_setting("school_address", data["address"], session=b_sess)
+                    b_sess.commit()
+                    b_sess.close()
+                finally:
+                    current_db_url.reset(token)
+            except Exception as b_err:
+                print(f"[portal] Warning: could not sync settings to branch DB {branch.id}: {b_err}")
+
             session.close()
             QMessageBox.information(self, "Updated", f"Branch '{data['name']}' updated.")
             self.load_branches_table()

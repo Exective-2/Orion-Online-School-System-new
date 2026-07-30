@@ -152,6 +152,11 @@ class StaffPanel(QWidget):
         process_btn.clicked.connect(self.process_monthly_payroll)
         pay_bar_layout.addWidget(process_btn)
         
+        bulk_pay_btn = QPushButton("⚡ Bulk Pay Pending")
+        bulk_pay_btn.setStyleSheet("background-color: #22c55e; color: white; font-weight: bold;")
+        bulk_pay_btn.clicked.connect(self.bulk_pay_payroll_desktop)
+        pay_bar_layout.addWidget(bulk_pay_btn)
+        
         pay_bar_layout.addStretch()
         p_layout.addWidget(pay_bar)
         
@@ -255,6 +260,57 @@ class StaffPanel(QWidget):
         except Exception as e:
             session.rollback()
             QMessageBox.critical(self, "Error", f"Failed to process payroll:\n{e}")
+        finally:
+            session.close()
+
+    def bulk_pay_payroll_desktop(self):
+        period = self.period_combo.currentText()
+        if not period:
+            return
+            
+        confirm = QMessageBox.question(
+            self, "Bulk Payout Confirmation",
+            f"Are you sure you want to process bulk salary payments for ALL pending staff members for period '{period}'?\n\n"
+            "This will mark pending payslips as Paid and record Salaries Expense entries for each staff member.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
+        if confirm != QMessageBox.StandardButton.Yes:
+            return
+
+        session = get_session()
+        try:
+            from database.models import Payslip, Expense
+            pending = session.query(Payslip).filter(Payslip.pay_period == period, Payslip.status == "Pending").all()
+            if not pending:
+                QMessageBox.information(self, "Bulk Payout Info", f"No pending payslips found for period '{period}'.")
+                return
+
+            recorded_by_id = None
+            if self.user and hasattr(self.user, "staff_profile") and self.user.staff_profile:
+                recorded_by_id = self.user.staff_profile.id
+
+            total_paid = 0.0
+            for sl in pending:
+                sl.status = "Paid"
+                sl.payment_date = datetime.date.today()
+                total_paid += sl.net_salary
+                
+                exp = Expense(
+                    title=f"Staff Salary - {sl.staff.first_name} {sl.staff.last_name} ({sl.pay_period})",
+                    category="Salaries",
+                    amount=sl.net_salary,
+                    date=datetime.date.today(),
+                    description=f"Bulk salary payout for period {sl.pay_period}",
+                    recorded_by=recorded_by_id
+                )
+                session.add(exp)
+
+            session.commit()
+            QMessageBox.information(self, "Success", f"Successfully processed bulk salary payments for {len(pending)} staff members!\n\nTotal Payout: GHS {total_paid:,.2f}")
+            self.load_payslips()
+        except Exception as e:
+            session.rollback()
+            QMessageBox.critical(self, "Error", f"Failed to process bulk payout:\n{e}")
         finally:
             session.close()
 

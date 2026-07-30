@@ -1870,20 +1870,52 @@ function loadPayrollPanel() {
         .catch(err => showToast(err.message, "error"));
 }
 
+function updatePayrollSelectedState() {
+    const selectedCbs = document.querySelectorAll(".payroll-row-cb:checked");
+    const countEl = document.getElementById("payroll-selected-count");
+    const selectedBtn = document.getElementById("btn-bulk-pay-selected");
+    
+    let totalSelectedNet = 0;
+    selectedCbs.forEach(cb => {
+        totalSelectedNet += parseFloat(cb.getAttribute("data-net") || "0");
+    });
+    
+    if (selectedCbs.length > 0) {
+        if (countEl) countEl.textContent = `${selectedCbs.length} staff - GHS ${totalSelectedNet.toFixed(2)}`;
+        if (selectedBtn) selectedBtn.style.display = "inline-flex";
+    } else {
+        if (countEl) countEl.textContent = "0";
+        if (selectedBtn) selectedBtn.style.display = "none";
+    }
+}
+
 function loadPayrollForPeriod(period) {
     if (!period) return;
     
     apiFetch(`/api/payroll?pay_period=${encodeURIComponent(period)}`)
         .then(payslips => {
             const tbody = document.querySelector("#payroll-table tbody");
+            if (!tbody) return;
             tbody.innerHTML = "";
+            
+            const selectAllCb = document.getElementById("payroll-select-all");
+            if (selectAllCb) {
+                selectAllCb.checked = false;
+                selectAllCb.onclick = (e) => {
+                    document.querySelectorAll(".payroll-row-cb").forEach(cb => {
+                        cb.checked = e.target.checked;
+                    });
+                    updatePayrollSelectedState();
+                };
+            }
+            updatePayrollSelectedState();
             
             let totalGross = 0;
             let totalDeductions = 0;
             let totalNet = 0;
             
             if (payslips.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="9" class="text-center">No records found for this period.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="10" class="text-center">No records found for this period.</td></tr>';
                 return;
             }
             
@@ -1904,8 +1936,13 @@ function loadPayrollForPeriod(period) {
                            <button type="button" class="btn btn-secondary btn-icon" title="Print Payslip" onclick="viewPdf('/api/payroll/payslips/${p.id}/pdf', 'Payslip_${p.staff_id}.pdf')"><i class="fa-solid fa-file-pdf"></i></button>
                        </div>`;
                        
+                const rowCb = p.status === "Pending"
+                    ? `<input type="checkbox" class="payroll-row-cb" value="${p.id}" data-net="${p.net_salary}" style="cursor:pointer; width:16px; height:16px;" onchange="updatePayrollSelectedState()">`
+                    : `<i class="fa-solid fa-circle-check" style="color:var(--accent-success);" title="Paid"></i>`;
+
                 tbody.innerHTML += `
                     <tr>
+                        <td style="text-align:center;">${rowCb}</td>
                         <td><strong>STF-${p.staff_id.toString().padStart(4, '0')}</strong></td>
                         <td>${p.staff_name}</td>
                         <td>${p.role_title}</td>
@@ -1938,6 +1975,64 @@ function processSalaryPayment(payslipId, staffName, period) {
     })
     .catch(err => showToast(err.message, "error"));
 }
+
+function bulkPayPeriodSalaries() {
+    const period = document.getElementById("filter-payroll-period")?.value;
+    if (!period) {
+        showToast("Please select a pay period first.", "error");
+        return;
+    }
+    
+    if (!confirm(`Are you sure you want to process bulk salary payments for ALL pending staff in period ${period}?\n\nThis will mark pending payslips as Paid and record Salaries Expense entries for each staff member.`)) {
+        return;
+    }
+
+    apiFetch("/api/payroll/bulk-pay", {
+        method: "POST",
+        body: { pay_period: period }
+    })
+    .then(res => {
+        showToast(res.message || `Bulk salary payment completed for period ${period}!`, "success");
+        loadPayrollForPeriod(period);
+    })
+    .catch(err => showToast(parseApiDetailMessage ? parseApiDetailMessage(err, err.message || "Failed to process bulk payout") : err.message, "error"));
+}
+
+function bulkPaySelectedSalaries() {
+    const selectedCbs = Array.from(document.querySelectorAll(".payroll-row-cb:checked"));
+    if (selectedCbs.length === 0) {
+        showToast("No pending staff selected for payout.", "error");
+        return;
+    }
+    
+    const ids = selectedCbs.map(cb => parseInt(cb.value));
+    let totalNet = 0;
+    selectedCbs.forEach(cb => {
+        totalNet += parseFloat(cb.getAttribute("data-net") || "0");
+    });
+
+    if (!confirm(`Are you sure you want to process bulk salary payment for ${ids.length} selected staff members totaling GHS ${totalNet.toFixed(2)}?`)) {
+        return;
+    }
+
+    apiFetch("/api/payroll/bulk-pay", {
+        method: "POST",
+        body: { payslip_ids: ids }
+    })
+    .then(res => {
+        showToast(res.message || `Bulk salary payment completed for ${ids.length} staff!`, "success");
+        const period = document.getElementById("filter-payroll-period")?.value;
+        if (period) loadPayrollForPeriod(period);
+    })
+    .catch(err => showToast(parseApiDetailMessage ? parseApiDetailMessage(err, err.message || "Failed to process bulk payout") : err.message, "error"));
+}
+
+window.updatePayrollSelectedState = updatePayrollSelectedState;
+window.bulkPayPeriodSalaries = bulkPayPeriodSalaries;
+window.bulkPaySelectedSalaries = bulkPaySelectedSalaries;
+
+document.getElementById("btn-bulk-pay-period")?.addEventListener("click", bulkPayPeriodSalaries);
+document.getElementById("btn-bulk-pay-selected")?.addEventListener("click", bulkPaySelectedSalaries);
 
 function openEditPayslipModal(payslipId) {
     const period = document.getElementById("filter-payroll-period").value;
@@ -4716,22 +4811,24 @@ function fetchStudentFeeParticulars(studentId) {
             const tbody = document.getElementById("fee-particulars-body");
             tbody.innerHTML = "";
 
+            totalBilledParticulars = 0;
             if (!data.particulars || data.particulars.length === 0) {
                 tbody.innerHTML = '<tr><td colspan="3" class="text-center" style="color:#94a3b8; padding: 20px;">No outstanding fee particulars logged for this student.</td></tr>';
-                totalBilledParticulars = 0;
             } else {
                 let idx = 1;
                 data.particulars.forEach(item => {
-                    totalBilledParticulars += item.amount;
+                    const itemAmount = (item.due !== undefined && item.due !== null) ? item.due : (item.amount || 0);
+                    const itemDesc = item.particular || item.description || "Fee Item";
+                    totalBilledParticulars += itemAmount;
                     tbody.innerHTML += `
                         <tr>
                             <td class="text-center" style="font-weight:700; color:#94a3b8;">${idx++}</td>
                             <td>
-                                <strong>${item.description}</strong>
-                                <br><small style="color:#94a3b8;">Ref: ${item.fee_id ? 'Fee #' + item.fee_id : 'General Bill'}</small>
+                                <strong>${itemDesc}</strong>
+                                <br><small style="color:#94a3b8;">${item.particular_type || 'Term Fee'} | Billed: GHS ${(item.amount_billed || 0).toFixed(2)} | Paid: GHS ${(item.amount_paid || 0).toFixed(2)}</small>
                             </td>
                             <td class="text-right">
-                                <input type="number" step="0.01" min="0" max="${item.amount}" class="form-control particular-pay-input text-right" data-bill-id="${item.bill_id}" value="${item.amount.toFixed(2)}" style="font-weight:800; color:#818cf8; background:#0f172a;">
+                                <input type="number" step="0.01" min="0" max="${itemAmount}" class="form-control particular-pay-input text-right" data-bill-id="${item.bill_id}" value="${itemAmount.toFixed(2)}" style="font-weight:800; color:#818cf8; background:#0f172a;" oninput="updateDueBalance()">
                             </td>
                         </tr>
                     `;
@@ -4739,8 +4836,11 @@ function fetchStudentFeeParticulars(studentId) {
             }
             updateDueBalance();
         })
-        .catch(err => showToast(err.message, "error"));
+        .catch(err => showToast(parseApiDetailMessage ? parseApiDetailMessage(err, err.message || "Failed to load fee particulars") : err.message, "error"));
 }
+
+window.selectSearchStudent = selectSearchStudent;
+window.fetchStudentFeeParticulars = fetchStudentFeeParticulars;
 
 // Student Live Search Listener
 document.addEventListener("DOMContentLoaded", () => {
@@ -4759,25 +4859,36 @@ document.addEventListener("DOMContentLoaded", () => {
                 return;
             }
 
-            const matches = allFeeStudentsList.filter(s => 
-                (s.first_name && s.first_name.toLowerCase().includes(query)) ||
-                (s.last_name && s.last_name.toLowerCase().includes(query)) ||
-                (s.admission_number && s.admission_number.toLowerCase().includes(query)) ||
-                (s.student_class && s.student_class.name && s.student_class.name.toLowerCase().includes(query))
-            ).slice(0, 10);
+            const matches = allFeeStudentsList.filter(s => {
+                const className = (s.class_name || (s.student_class ? s.student_class.name : "")).toLowerCase();
+                const admNo = (s.admission_number || s.id || "").toString().toLowerCase();
+                const fn = (s.first_name || "").toLowerCase();
+                const ln = (s.last_name || "").toLowerCase();
+                return fn.includes(query) || ln.includes(query) || admNo.includes(query) || className.includes(query);
+            }).slice(0, 10);
 
             if (matches.length === 0) {
                 searchResults.innerHTML = `<div style="padding:12px; color:#94a3b8; text-align:center;">No active students found matching "${query}"</div>`;
             } else {
-                searchResults.innerHTML = matches.map(s => `
-                    <div class="search-item" onclick="selectSearchStudent(${s.id}, '${(s.first_name + ' ' + s.last_name).replace(/'/g, "\\'")}', '${(s.student_class ? s.student_class.name : "Unassigned").replace(/'/g, "\\'")}', '${s.admission_number || s.id}')" style="padding:10px 15px; border-bottom:1px solid rgba(255,255,255,0.08); cursor:pointer; display:flex; justify-content:space-between; align-items:center;">
-                        <div>
-                            <strong style="color:#f8fafc; font-size:14px;">${s.first_name} ${s.last_name}</strong>
-                            <div style="font-size:12px; color:#94a3b8;">Adm No: ${s.admission_number || s.id} | Parent: ${s.parent_phone || 'N/A'}</div>
+                searchResults.innerHTML = matches.map(s => {
+                    const fullName = `${s.first_name || ''} ${s.last_name || ''}`.trim();
+                    const cls = s.class_name || (s.student_class ? s.student_class.name : "Unassigned");
+                    const adm = s.admission_number || s.id;
+                    const safeFull = fullName.replace(/'/g, "\\'");
+                    const safeCls = cls.replace(/'/g, "\\'");
+                    const safeAdm = String(adm).replace(/'/g, "\\'");
+                    const safeId = String(s.id).replace(/'/g, "\\'");
+
+                    return `
+                        <div class="search-item" onclick="selectSearchStudent('${safeId}', '${safeFull}', '${safeCls}', '${safeAdm}')" style="padding:10px 15px; border-bottom:1px solid rgba(255,255,255,0.08); cursor:pointer; display:flex; justify-content:space-between; align-items:center;">
+                            <div>
+                                <strong style="color:#f8fafc; font-size:14px;">${fullName}</strong>
+                                <div style="font-size:12px; color:#94a3b8;">Adm No: ${adm} | Parent: ${s.parent_phone || 'N/A'}</div>
+                            </div>
+                            <span class="badge badge-branch">${cls}</span>
                         </div>
-                        <span class="badge badge-branch">${s.student_class ? s.student_class.name : 'Unassigned'}</span>
-                    </div>
-                `).join("");
+                    `;
+                }).join("");
             }
             searchResults.style.display = "block";
         });
@@ -6878,10 +6989,10 @@ document.getElementById("form-edit-branch")?.addEventListener("submit", (e) => {
      apiFetch(`/api/sysadmin/branches/${bid}`, { method: "PUT", body: payload })
          .then(() => {
               showToast("Branch configuration updated successfully!", "success");
-              document.getElementById("modal-edit-branch").classList.remove("show");
+              closeModal("modal-edit-branch");
               loadSysadmin();
          })
-         .catch(err => showToast(err.message, "error"));
+         .catch(err => showToast(parseApiDetailMessage(err, err.message || "Failed to update branch"), "error"));
 });
 
 document.getElementById("btn-add-sysadmin-trigger").addEventListener("click", () => {

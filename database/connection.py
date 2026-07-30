@@ -13,6 +13,7 @@ _SessionLocal = None
 # A dictionary to cache branch engines and sessionmakers for web multi-tenancy
 _branch_engines = {}
 _branch_session_makers = {}
+_initialized_db_urls = set()
 
 # Context variable to hold the active database URL for the current request context
 current_db_url = contextvars.ContextVar("current_db_url", default=None)
@@ -77,6 +78,8 @@ def get_engine():
                     try:
                         dbapi_conn.execute("PRAGMA journal_mode=WAL;")
                         dbapi_conn.execute("PRAGMA busy_timeout=5000;")
+                        dbapi_conn.execute("PRAGMA synchronous=NORMAL;")
+                        dbapi_conn.execute("PRAGMA cache_size=-64000;")
                     except Exception:
                         pass
             
@@ -110,6 +113,8 @@ def get_engine():
                 try:
                     dbapi_conn.execute("PRAGMA journal_mode=WAL;")
                     dbapi_conn.execute("PRAGMA busy_timeout=5000;")
+                    dbapi_conn.execute("PRAGMA synchronous=NORMAL;")
+                    dbapi_conn.execute("PRAGMA cache_size=-64000;")
                 except Exception:
                     pass
                 
@@ -128,7 +133,11 @@ def get_session():
         _SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
     return _SessionLocal()
 
-def init_db():
+def init_db(force: bool = False):
+    db_url = current_db_url.get() or get_db_url()
+    if not force and db_url in _initialized_db_urls:
+        return
+        
     from database.models import Base
     engine = get_engine()
     Base.metadata.create_all(bind=engine)
@@ -153,6 +162,7 @@ def init_db():
                 conn.execute(text(col_def))
             except Exception:
                 pass
+    _initialized_db_urls.add(db_url)
 
 def reset_engine():
     """Dispose the current engine and clear the singleton references.
