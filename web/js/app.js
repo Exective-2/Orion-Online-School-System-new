@@ -3716,6 +3716,10 @@ function autoAssignRemarks() {
 }
 
 function loadPendingApprovals() {
+    const isSysAdmin = currentUser && currentUser.role === "System Admin";
+    const isAdmin = currentUser && (currentUser.role === "Admin/Headteacher" || currentUser.role === "Super Admin" || isSysAdmin);
+    if (!isAdmin) return;
+
     const activeAuthToken = localStorage.getItem("orion_token") || localStorage.getItem("token") || currentToken || "";
     const tokenQuery = activeAuthToken ? `&token=${encodeURIComponent(activeAuthToken)}` : "";
 
