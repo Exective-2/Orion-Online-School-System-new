@@ -1011,16 +1011,6 @@ function initLoginPage() {
         loginForm.addEventListener("submit", handleLoginSubmit);
     }
 
-    // Test credentials collapsible toggle
-    if (credsToggle && credsPanel) {
-        credsToggle.addEventListener("click", () => {
-            const isOpen = credsPanel.classList.toggle("open");
-            credsToggle.classList.toggle("open", isOpen);
-            const label = credsToggle.querySelector("span");
-            if (label) label.textContent = isOpen ? "Hide test credentials" : "View test credentials";
-        });
-    }
-
     // Setup wizard link
     if (setupLink) {
         setupLink.addEventListener("click", () => {
