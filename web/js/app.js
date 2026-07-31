@@ -658,18 +658,41 @@ window.openDeleteStudentModal = openDeleteStudentModal;
 
 // --- 4. Global Events & Theme ---
 function initGlobalEventListeners() {
-    // Sidebar Toggle Collapse
+    // Sidebar Toggle & Mobile Drawer
     const sidebarToggle = document.getElementById("btn-sidebar-toggle");
+    const sidebarOverlay = document.getElementById("sidebar-overlay");
+
     if (sidebarToggle) {
         sidebarToggle.addEventListener("click", () => {
             const layout = document.querySelector(".app-layout");
             if (layout) {
-                layout.classList.toggle("sidebar-collapsed");
-                const isCollapsed = layout.classList.contains("sidebar-collapsed");
-                localStorage.setItem("sidebarCollapsed", isCollapsed);
+                if (window.innerWidth <= 768) {
+                    layout.classList.toggle("sidebar-mobile-open");
+                } else {
+                    layout.classList.toggle("sidebar-collapsed");
+                    const isCollapsed = layout.classList.contains("sidebar-collapsed");
+                    localStorage.setItem("sidebarCollapsed", isCollapsed);
+                }
             }
         });
     }
+
+    if (sidebarOverlay) {
+        sidebarOverlay.addEventListener("click", () => {
+            const layout = document.querySelector(".app-layout");
+            if (layout) layout.classList.remove("sidebar-mobile-open");
+        });
+    }
+
+    // Auto-close mobile sidebar drawer when navigating on small screens
+    document.querySelectorAll(".sidebar-nav .nav-link").forEach(link => {
+        link.addEventListener("click", () => {
+            if (window.innerWidth <= 768) {
+                const layout = document.querySelector(".app-layout");
+                if (layout) layout.classList.remove("sidebar-mobile-open");
+            }
+        });
+    });
 
     // Theme Switcher & Dropdown Menu
     const themeBtn = document.getElementById("btn-theme-toggle");

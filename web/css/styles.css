@@ -1789,5 +1789,174 @@ select.form-control option { background: #0f1623; color: var(--text-primary); }
     border: 1px solid rgba(239, 68, 68, 0.4);
 }
 
+/* ── 15. Comprehensive Device & Screen Size Responsiveness ── */
+
+/* Table Scroll Container */
+.table-responsive {
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    margin-bottom: 15px;
+    border-radius: var(--border-radius-sm);
+}
+
+/* Touch Friendly Targets */
+.btn, .form-control, .nav-link, .tab-btn {
+    min-height: 40px;
+    touch-action: manipulation;
+}
+
+/* Off-Canvas Mobile Overlay */
+.sidebar-overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(8, 12, 20, 0.7);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    z-index: 1999;
+    display: none;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+/* Screen Size Adaptations: Tablets & Desktops (<= 1024px) */
+@media (max-width: 1024px) {
+    .metrics-grid {
+        grid-template-columns: repeat(2, 1fr) !important;
+    }
+    .form-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    .panel-header-with-actions {
+        flex-wrap: wrap;
+        gap: 12px;
+    }
+}
+
+/* Screen Size Adaptations: Mobile & Small Tablets (<= 768px) */
+@media (max-width: 768px) {
+    /* Mobile Off-Canvas Drawer Navigation */
+    .app-sidebar {
+        position: fixed !important;
+        top: 0 !important; left: 0 !important; bottom: 0 !important;
+        width: 270px !important;
+        height: 100vh !important;
+        transform: translateX(-100%);
+        box-shadow: 0 0 40px rgba(0, 0, 0, 0.6);
+        z-index: 2000 !important;
+        transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    }
+    
+    .app-layout.sidebar-mobile-open .app-sidebar {
+        transform: translateX(0) !important;
+    }
+    
+    .app-layout.sidebar-mobile-open .sidebar-overlay {
+        display: block !important;
+        opacity: 1 !important;
+    }
+    
+    .app-main-content {
+        margin-left: 0 !important;
+        width: 100vw !important;
+    }
+    
+    .app-header {
+        padding: 0 14px !important;
+        gap: 8px;
+    }
+    
+    .header-search {
+        min-width: 110px !important;
+        max-width: 180px !important;
+        padding: 0 10px !important;
+    }
+    .header-search input {
+        font-size: 12px !important;
+    }
+    
+    .badge-branch, .badge-academic {
+        font-size: 10px !important;
+        padding: 3px 6px !important;
+        max-width: 120px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    
+    /* Layout & Component Grid Collapse */
+    .metrics-grid, .stats-grid, .form-grid, .dashboard-details-grid {
+        grid-template-columns: 1fr !important;
+    }
+    
+    .content-container {
+        padding: 14px !important;
+    }
+    
+    .panel-header-with-actions {
+        flex-direction: column !important;
+        align-items: flex-start !important;
+        gap: 10px !important;
+    }
+    
+    .panel-header-with-actions h1 {
+        font-size: 20px !important;
+    }
+    
+    .header-actions-row, .action-buttons {
+        width: 100%;
+        flex-wrap: wrap;
+        gap: 8px !important;
+    }
+    
+    .tab-header {
+        overflow-x: auto;
+        white-space: nowrap;
+        -webkit-overflow-scrolling: touch;
+        padding-bottom: 6px;
+    }
+    
+    .tab-btn {
+        padding: 8px 14px !important;
+        font-size: 12px !important;
+    }
+    
+    /* Modal Responsiveness */
+    .modal-dialog {
+        width: 95vw !important;
+        max-width: 95vw !important;
+        margin: 10px auto !important;
+        padding: 16px !important;
+        max-height: 92vh !important;
+        overflow-y: auto;
+    }
+    
+    .modal-footer {
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+    .modal-footer .btn {
+        flex: 1;
+        min-width: 120px;
+    }
+}
+
+/* Extra Small Screens (<= 480px) */
+@media (max-width: 480px) {
+    .header-search {
+        display: none !important;
+    }
+    .profile-text {
+        display: none !important;
+    }
+    .app-header {
+        justify-content: space-between;
+    }
+    .table th, .table td {
+        padding: 8px 10px !important;
+        font-size: 12px !important;
+    }
+}
+
 
 
