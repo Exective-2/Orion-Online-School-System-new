@@ -1044,8 +1044,8 @@ select.form-control option { background: #0f1623; color: var(--text-primary); }
     border-bottom: 1px solid var(--border-glass);
     flex-shrink: 0;
 }
-.brand-icon { font-size: 22px; color: var(--accent-primary); text-shadow: var(--shadow-glow); }
-.brand-text { font-size: 17px; font-weight: 900; letter-spacing: 1px; }
+.brand-icon { font-size: 20px; color: var(--accent-primary); text-shadow: var(--shadow-glow); flex-shrink: 0; }
+.brand-text { font-size: 14px; font-weight: 800; letter-spacing: 0.5px; line-height: 1.25; color: var(--text-primary); }
 .sidebar-nav { flex: 1; padding: 16px 12px; overflow-y: auto; overflow-x: hidden; }
 .sidebar-nav ul { list-style: none; }
 .sidebar-nav li { margin-bottom: 4px; }
