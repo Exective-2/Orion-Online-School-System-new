@@ -780,8 +780,7 @@ def dashboard_stats(user=Depends(get_current_user)):
             if staff_profile:
                 ct_record = session.query(ClassTeacher).filter(
                     ClassTeacher.staff_id == staff_profile.id,
-                    ClassTeacher.academic_year_id == y_id,
-                    ClassTeacher.term_id == t_id
+                    ClassTeacher.academic_year_id == y_id
                 ).first()
             if ct_record:
                 att_query = att_query.join(Student, Attendance.student_id == Student.id).filter(Student.class_id == ct_record.class_id)
