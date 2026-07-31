@@ -658,8 +658,7 @@ def request_otp(req: OTPRequest):
     masked = f"{raw_phone[:4]}***{raw_phone[-2:]}" if len(raw_phone) >= 6 else raw_phone
     return {
         "status": "success",
-        "message": f"OTP verification code sent via SMS to {masked}.",
-        "debug_otp": otp_code
+        "message": f"OTP verification code sent via SMS to {masked}."
     }
 
 @app.post("/api/auth/verify-otp")

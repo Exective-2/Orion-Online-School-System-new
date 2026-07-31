@@ -1013,17 +1013,14 @@ function handleRequestOtp(e) {
         return data;
     })
     .then(data => {
-        showToast(data.message || "OTP code sent via SMS!", "success");
-        if (data.debug_otp) {
-            showToast(`[OTP Code] Your verification code is: ${data.debug_otp}`, "info");
-        }
+        showToast(data.message || "OTP verification code sent via SMS to your registered phone number!", "success");
         const groupCode = document.getElementById("group-otp-code");
         const btnVerify = document.getElementById("btn-verify-otp");
         if (groupCode) groupCode.style.display = "block";
         if (btnVerify) btnVerify.style.display = "block";
         const codeInput = document.getElementById("login-otp-code");
         if (codeInput) {
-            if (data.debug_otp) codeInput.value = data.debug_otp;
+            codeInput.value = "";
             codeInput.focus();
         }
     })
