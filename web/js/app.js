@@ -4348,15 +4348,17 @@ function loadFees() {
              }
              bills.forEach(b => {
                  const statusColor = b.status === "Paid" ? "badge-academic" : b.status === "Partially Paid" ? "badge-warning" : "badge-branch";
+                 const billedAmt = (b.total_billed || 0).toFixed(2);
+                 const paidAmt = (b.total_paid || 0).toFixed(2);
                  tbody.innerHTML += `
                      <tr>
-                         <td><strong>${b.student_id}</strong></td>
-                         <td>${b.student_name}</td>
-                         <td>${b.fee_name}</td>
-                         <td>${b.term_name}</td>
-                         <td>GHS ${b.total_billed.toFixed(2)}</td>
-                         <td>GHS ${b.total_paid.toFixed(2)}</td>
-                         <td><span class="badge ${statusColor}">${b.status}</span></td>
+                         <td><strong>${b.student_id || '—'}</strong></td>
+                         <td>${b.student_name || '—'}</td>
+                         <td>${b.fee_name || '—'}</td>
+                         <td>${b.term_name || '—'}</td>
+                         <td>GHS ${billedAmt}</td>
+                         <td>GHS ${paidAmt}</td>
+                         <td><span class="badge ${statusColor}">${b.status || 'Pending'}</span></td>
                      </tr>`;
              });
         });
@@ -4372,15 +4374,16 @@ function loadFees() {
                   return;
              }
              payments.forEach(p => {
+                  const pAmt = (p.amount || 0).toFixed(2);
                   tbody.innerHTML += `
                       <tr>
                           <td><strong>#${p.id}</strong></td>
-                          <td>${p.student_id}</td>
-                          <td>${p.student_name}</td>
-                          <td>${p.amount.toFixed(2)} GHS</td>
-                          <td>${p.payment_mode}</td>
+                          <td>${p.student_id || '—'}</td>
+                          <td>${p.student_name || '—'}</td>
+                          <td>GHS ${pAmt}</td>
+                          <td>${p.payment_mode || 'Cash'}</td>
                           <td>${p.ref_number || "N/A"}</td>
-                          <td>${p.date}</td>
+                          <td>${p.date || '—'}</td>
                           <td><a href="/api/fees/payments/${p.id}/receipt?token=${encodeURIComponent(currentToken)}" target="_blank" class="btn btn-secondary btn-icon" title="Receipt"><i class="fa-solid fa-file-pdf"></i></a></td>
                       </tr>`;
              });
@@ -4399,15 +4402,18 @@ function loadFees() {
              balances.forEach((b, idx) => {
                   const activeAuthToken = localStorage.getItem("orion_token") || localStorage.getItem("token") || currentToken || "";
                   const tokenQuery = activeAuthToken ? `&token=${encodeURIComponent(activeAuthToken)}` : "";
+                  const bBilled = (b.total_billed || 0).toFixed(2);
+                  const bPaid = (b.total_paid || 0).toFixed(2);
+                  const bBal = (b.balance || 0).toFixed(2);
                   tbody.innerHTML += `
                       <tr>
                           <td style="text-align:center; font-weight:700;">${idx + 1}</td>
-                          <td><strong>${b.student_id}</strong></td>
-                          <td><strong>${b.student_name}</strong></td>
-                          <td><span class="badge" style="background:rgba(99,102,241,0.15); color:#818cf8;">${b.class_name}</span></td>
-                          <td>GHS ${b.total_billed.toFixed(2)}</td>
-                          <td>GHS ${b.total_paid.toFixed(2)}</td>
-                          <td style="color:#ef4444; font-weight:700;">GHS ${b.balance.toFixed(2)}</td>
+                          <td><strong>${b.student_id || '—'}</strong></td>
+                          <td><strong>${b.student_name || '—'}</strong></td>
+                          <td><span class="badge" style="background:rgba(99,102,241,0.15); color:#818cf8;">${b.class_name || 'General'}</span></td>
+                          <td>GHS ${bBilled}</td>
+                          <td>GHS ${bPaid}</td>
+                          <td style="color:#ef4444; font-weight:700;">GHS ${bBal}</td>
                           <td style="text-align:center;">
                               <button class="btn btn-success btn-xs btn-pay-debtor" data-student-id="${b.student_id}">
                                   <i class="fa-solid fa-receipt"></i> Pay Fees
