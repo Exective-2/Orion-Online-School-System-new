@@ -199,8 +199,14 @@ function triggerAppSplash(onComplete) {
     if (splashLogo) splashLogo.style.display = "none";
     if (splashIcon) splashIcon.style.display = "inline-block";
 
-    // Switch view to splash screen
+    // Switch view to splash screen with cross-browser inline overrides
     showView("view-splash");
+    const splashView = document.getElementById("view-splash");
+    if (splashView) {
+        splashView.style.display = "flex";
+        splashView.style.opacity = "1";
+        splashView.style.visibility = "visible";
+    }
 
     // Fetch branding logo & school profile info
     apiFetch("/api/settings/school-profile")
@@ -239,10 +245,17 @@ function triggerAppSplash(onComplete) {
         if (progress >= 100) {
             clearInterval(interval);
             setTimeout(() => {
-                const splashView = document.getElementById("view-splash");
-                if (splashView) splashView.classList.add("fade-out");
+                if (splashView) {
+                    splashView.classList.add("fade-out");
+                    splashView.style.opacity = "0";
+                }
                 setTimeout(() => {
-                    if (splashView) splashView.classList.remove("fade-out");
+                    if (splashView) {
+                        splashView.classList.remove("fade-out");
+                        splashView.style.display = "";
+                        splashView.style.opacity = "";
+                        splashView.style.visibility = "";
+                    }
                     if (typeof onComplete === "function") {
                         onComplete();
                     } else {
