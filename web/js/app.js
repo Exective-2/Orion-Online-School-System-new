@@ -406,20 +406,29 @@ function applyRoleBasedNavigation(payload) {
         }
     }
 
-    // Sub-tab restrictions inside Examinations
+    // Sub-tab & New Exam Setup restrictions inside Examinations
+    const btnAddExam = document.getElementById("btn-add-exam-trigger");
     if (isTeacher && !isAdmin) {
+        if (btnAddExam) btnAddExam.style.display = "none";
+        
         const approvalTabBtn = document.querySelector("#panel-exams .tab-btn[data-tab='tab-exam-approvals']");
-        if (approvalTabBtn) {
-            approvalTabBtn.style.display = "none";
-        }
+        if (approvalTabBtn) approvalTabBtn.style.display = "none";
+        
         const examListTabBtn = document.querySelector("#panel-exams .tab-btn[data-tab='tab-exam-list']");
-        if (examListTabBtn) {
-            examListTabBtn.style.display = "none";
-        }
+        if (examListTabBtn) examListTabBtn.style.display = "none";
+        
         const headApprTabBtn = document.querySelector("#panel-exams .tab-btn[data-tab='tab-exam-head-approval']");
-        if (headApprTabBtn) {
-            headApprTabBtn.style.display = "none";
+        if (headApprTabBtn) headApprTabBtn.style.display = "none";
+
+        const activeTabBtn = document.querySelector("#panel-exams .tab-btn.active");
+        if (!activeTabBtn || activeTabBtn.dataset.tab === "tab-exam-list") {
+            const resultsTabBtn = document.querySelector("#panel-exams .tab-btn[data-tab='tab-exam-results']");
+            if (resultsTabBtn) resultsTabBtn.click();
         }
+    } else {
+        if (btnAddExam) btnAddExam.style.display = "inline-block";
+        const examListTabBtn = document.querySelector("#panel-exams .tab-btn[data-tab='tab-exam-list']");
+        if (examListTabBtn) examListTabBtn.style.display = "inline-block";
     }
 
     // Sub-tab restrictions inside Attendance
@@ -3062,6 +3071,7 @@ function getGradeForScore(score) {
 // --- Exams Panel logic ---
 function loadExams() {
     initTabs("panel-exams");
+    applyRoleBasedNavigation(currentUser);
     ensureGradingScaleLoaded();
     loadResultApprovalDropdowns();
     loadPendingApprovals();
