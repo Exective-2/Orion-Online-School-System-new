@@ -341,6 +341,33 @@
             </div>
         </section>
         
+        <!-- ── 2. AUTHENTICATION & INITIALIZATION SPLASH SCREEN ── -->
+        <section id="view-splash" class="view-panel">
+            <div class="splash-container">
+                <div class="splash-card glass-panel">
+                    <div class="splash-logo-container">
+                        <div class="splash-pulse-ring"></div>
+                        <div class="splash-pulse-ring secondary"></div>
+                        <div class="splash-logo-box">
+                            <img id="splash-school-logo" src="/uploads/school_logo.png" style="display:none; height:48px; width:48px; object-fit:contain; border-radius:6px;" onerror="this.style.display='none'; document.getElementById('splash-default-icon').style.display='inline-block';">
+                            <i class="fa-solid fa-graduation-cap splash-icon" id="splash-default-icon"></i>
+                        </div>
+                    </div>
+
+                    <h2 class="splash-title" id="splash-school-title">ORION SCHOOL SYSTEM</h2>
+                    <p class="splash-subtitle" id="splash-user-welcome">Initializing secure workspace...</p>
+
+                    <div class="splash-progress-bar-container">
+                        <div class="splash-progress-bar" id="splash-progress-fill"></div>
+                    </div>
+
+                    <div class="splash-status-text" id="splash-status-text">
+                        <i class="fa-solid fa-circle-notch fa-spin"></i> Authenticating credentials...
+                    </div>
+                </div>
+            </div>
+        </section>
+        
         <!-- ── 3. MAIN WEB APPLICATION LAYOUT ── -->
         <section id="view-main-layout" class="view-panel">
             <div class="app-layout">
@@ -5300,6 +5327,6 @@
     </div>
 
     <!-- Script Entry -->
-    <script src="/js/app.js?v=20260731_1323"></script>
+    <script src="/js/app.js?v=20260731_1332"></script>
 </body>
 </html>

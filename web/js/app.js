@@ -173,6 +173,76 @@ function decodeJwtPayload(token) {
     }
 }
 
+function triggerAppSplash(onComplete) {
+    let payload = null;
+    try {
+        if (currentToken) {
+            payload = decodeJwtPayload(currentToken);
+        }
+    } catch (e) {}
+
+    const splashTitle = document.getElementById("splash-school-title");
+    const splashUser = document.getElementById("splash-user-welcome");
+    const splashLogo = document.getElementById("splash-school-logo");
+    const splashIcon = document.getElementById("splash-default-icon");
+    const progressFill = document.getElementById("splash-progress-fill");
+    const statusText = document.getElementById("splash-status-text");
+
+    const schoolName = (payload && payload.branch_name) || "ORION SCHOOL SYSTEM";
+    const userName = (payload && (payload.full_name || payload.student_name || payload.username)) || "User";
+
+    if (splashTitle) splashTitle.innerText = schoolName.toUpperCase();
+    if (splashUser) splashUser.innerText = `Welcome back, ${userName}!`;
+    if (progressFill) progressFill.style.width = "0%";
+
+    // Switch view to splash screen
+    showView("view-splash");
+
+    // Fetch branding logo if available
+    apiFetch("/api/settings/school-profile")
+        .then(profile => {
+            if (profile && profile.school_logo && splashLogo) {
+                const logoUrl = profile.school_logo.startsWith("/") ? profile.school_logo : "/" + profile.school_logo;
+                splashLogo.src = `${logoUrl}?v=${Date.now()}`;
+                splashLogo.style.display = "inline-block";
+                if (splashIcon) splashIcon.style.display = "none";
+            }
+        })
+        .catch(() => {});
+
+    let progress = 0;
+    const interval = setInterval(() => {
+        progress += 10;
+        if (progressFill) progressFill.style.width = progress + "%";
+
+        if (statusText) {
+            if (progress < 35) {
+                statusText.innerHTML = `<i class="fa-solid fa-shield-halved fa-beat"></i> Authenticating user session...`;
+            } else if (progress < 75) {
+                statusText.innerHTML = `<i class="fa-solid fa-building-user fa-spin"></i> Loading branch workspace & permissions...`;
+            } else {
+                statusText.innerHTML = `<i class="fa-solid fa-circle-check"></i> Preparing dashboard analytics...`;
+            }
+        }
+
+        if (progress >= 100) {
+            clearInterval(interval);
+            setTimeout(() => {
+                const splashView = document.getElementById("view-splash");
+                if (splashView) splashView.classList.add("fade-out");
+                setTimeout(() => {
+                    if (splashView) splashView.classList.remove("fade-out");
+                    if (typeof onComplete === "function") {
+                        onComplete();
+                    } else {
+                        parseTokenAndRoute();
+                    }
+                }, 300);
+            }, 250);
+        }
+    }, 110);
+}
+
 function parseTokenAndRoute() {
     if (!currentToken) {
         showView("view-login");
@@ -1067,7 +1137,7 @@ function handleVerifyOtpSubmit(e) {
         currentToken = data.token;
         localStorage.setItem("orion_token", currentToken);
         showToast(`Welcome, ${data.full_name || "User"}! Signed in via SMS OTP verification`, "success");
-        parseTokenAndRoute();
+        triggerAppSplash();
     })
     .catch(err => {
         showToast(err.message || "OTP verification failed", "error");
@@ -1193,7 +1263,7 @@ function handleLoginSubmit(e) {
         document.getElementById("login-username").value = "";
         document.getElementById("login-password").value = "";
         updateLoginIndicator("");
-        parseTokenAndRoute();
+        triggerAppSplash();
     })
     .catch(err => {
         showToast(err.message, "error");

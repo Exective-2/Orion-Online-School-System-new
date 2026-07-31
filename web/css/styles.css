@@ -1958,5 +1958,136 @@ select.form-control option { background: #0f1623; color: var(--text-primary); }
     }
 }
 
+/* ── 16. Animated Login Splash Screen ── */
+#view-splash {
+    background: radial-gradient(circle at top right, #1e1b4b 0%, #0f172a 50%, #080c14 100%);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    width: 100vw;
+    position: fixed;
+    top: 0; left: 0;
+    z-index: 9999;
+    transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+#view-splash.active {
+    display: flex !important;
+    opacity: 1;
+}
+
+#view-splash.fade-out {
+    opacity: 0 !important;
+    transform: scale(1.03) !important;
+}
+
+.splash-container {
+    width: 100%;
+    max-width: 440px;
+    padding: 24px;
+    text-align: center;
+}
+
+.splash-card {
+    padding: 40px 32px;
+    border-radius: 24px;
+    background: rgba(15, 23, 42, 0.75);
+    backdrop-filter: blur(25px) saturate(160%);
+    -webkit-backdrop-filter: blur(25px) saturate(160%);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+}
+
+.splash-logo-container {
+    position: relative;
+    width: 90px;
+    height: 90px;
+    margin: 0 auto 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.splash-logo-box {
+    width: 72px;
+    height: 72px;
+    border-radius: 20px;
+    background: linear-gradient(135deg, var(--accent-primary) 0%, #1d4ed8 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 10px 25px rgba(59, 130, 246, 0.4);
+    z-index: 2;
+}
+
+.splash-icon {
+    font-size: 32px;
+    color: #ffffff;
+}
+
+.splash-pulse-ring {
+    position: absolute;
+    top: -5px; left: -5px; right: -5px; bottom: -5px;
+    border-radius: 28px;
+    border: 2px solid var(--accent-primary);
+    animation: splashPulse 2s infinite cubic-bezier(0.4, 0, 0.2, 1);
+    opacity: 0.7;
+}
+
+.splash-pulse-ring.secondary {
+    animation-delay: 0.6s;
+}
+
+@keyframes splashPulse {
+    0% { transform: scale(0.95); opacity: 0.8; }
+    50% { transform: scale(1.15); opacity: 0.2; }
+    100% { transform: scale(0.95); opacity: 0.8; }
+}
+
+.splash-title {
+    font-size: 19px;
+    font-weight: 800;
+    color: #ffffff;
+    letter-spacing: 0.5px;
+    margin-bottom: 6px;
+    text-transform: uppercase;
+}
+
+.splash-subtitle {
+    font-size: 13.5px;
+    color: var(--text-secondary);
+    margin-bottom: 28px;
+}
+
+.splash-progress-bar-container {
+    height: 6px;
+    width: 100%;
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 10px;
+    overflow: hidden;
+    margin-bottom: 16px;
+    position: relative;
+}
+
+.splash-progress-bar {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, var(--accent-primary) 0%, #60a5fa 100%);
+    box-shadow: 0 0 12px var(--accent-primary);
+    border-radius: 10px;
+    transition: width 0.12s linear;
+}
+
+.splash-status-text {
+    font-size: 12.5px;
+    font-weight: 500;
+    color: var(--accent-primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
 
 
