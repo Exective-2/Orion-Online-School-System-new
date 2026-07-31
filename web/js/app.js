@@ -218,11 +218,23 @@ function triggerAppSplash(onComplete) {
                 if (profile.school_logo && splashLogo) {
                     const isDataUri = profile.school_logo.startsWith("data:");
                     const logoUrl = isDataUri || profile.school_logo.startsWith("/") ? profile.school_logo : "/" + profile.school_logo;
-                    splashLogo.src = isDataUri ? logoUrl : `${logoUrl}?v=${Date.now()}`;
-                    splashLogo.onload = () => {
+                    
+                    const showLogo = () => {
                         splashLogo.style.display = "inline-block";
                         if (splashIcon) splashIcon.style.display = "none";
                     };
+
+                    splashLogo.onload = showLogo;
+                    splashLogo.onerror = () => {
+                        splashLogo.style.display = "none";
+                        if (splashIcon) splashIcon.style.display = "inline-block";
+                    };
+
+                    splashLogo.src = isDataUri ? logoUrl : `${logoUrl}?v=${Date.now()}`;
+
+                    if (isDataUri || (splashLogo.complete && splashLogo.naturalWidth > 0)) {
+                        showLogo();
+                    }
                 }
             }
         })
