@@ -1426,10 +1426,13 @@ def register_staff(data: dict, user=Depends(get_current_user)):
     try:
         username = data.get("username").strip()
         role_name = data.get("role_name", "Teacher")
+        first_name = data.get("first_name", "")
+        last_name = data.get("last_name", "")
+        phone = data.get("phone", "")
+        pwd = data.get("password") or "Orion@123"
         
         # Create User Account
         role = session.query(Role).filter(Role.name == role_name).first()
-        pwd = data.get("password") or "Orion@123"
         new_user = User(
             username=username,
             password_hash=hash_password(pwd.strip()),
@@ -1442,11 +1445,11 @@ def register_staff(data: dict, user=Depends(get_current_user)):
         # Create Staff Profile
         staff = Staff(
             user_id=new_user.id,
-            first_name=data.get("first_name"),
-            last_name=data.get("last_name"),
+            first_name=first_name,
+            last_name=last_name,
             role_title=role_name,
             email=data.get("email"),
-            phone=data.get("phone"),
+            phone=phone,
             qualification=data.get("qualification"),
             base_salary=float(data.get("base_salary", 0.0)),
             hire_date=datetime.date.today(),
@@ -1454,8 +1457,18 @@ def register_staff(data: dict, user=Depends(get_current_user)):
         )
         session.add(staff)
         session.commit()
-        log_audit(user, "Register Staff", f"Registered staff profile for {username} ({role_name})")
-        return {"status": "success"}
+
+        # Dispatch SMS Credentials Notification
+        sms_sent = False
+        if phone and len(phone.strip()) >= 8:
+            school_name = get_branch_setting("school_name", "ORION SCHOOL SYSTEM")
+            full_name = f"{first_name} {last_name}".strip() or username
+            sms_text = f"Welcome to {school_name}, {full_name}! Your {role_name} account is ready.\nUsername: {username}\nPassword: {pwd.strip()}\nAccess portal: https://orion-school.vercel.app"
+            sms_sent, _ = send_sms(phone, sms_text, trigger_type="StaffAccountCredentials")
+
+        log_audit(user, "Register Staff", f"Registered staff profile for {username} ({role_name}) - SMS sent: {sms_sent}")
+        msg = f"Staff registered successfully! Login credentials sent via SMS to {phone}." if sms_sent else "Staff registered successfully!"
+        return {"status": "success", "sms_sent": sms_sent, "message": msg}
     except Exception as e:
         session.rollback()
         raise HTTPException(status_code=500, detail=str(e))
@@ -1545,8 +1558,25 @@ def register_staff_bulk(data: List[dict], user=Depends(get_current_user)):
             session.add(staff)
             
         session.commit()
-        log_audit(user, "Bulk Register Staff", f"Registered {len(data)} staff profiles in bulk")
-        return {"status": "success", "count": len(data)}
+
+        # Dispatch SMS Notifications for bulk created staff
+        sms_count = 0
+        school_name = get_branch_setting("school_name", "ORION SCHOOL SYSTEM")
+        for row in data:
+            phone = row.get("phone")
+            username = row.get("username").strip()
+            role_name = row.get("role_name", "Teacher")
+            first_name = row.get("first_name", "")
+            last_name = row.get("last_name", "")
+            if phone and len(phone.strip()) >= 8:
+                full_name = f"{first_name} {last_name}".strip() or username
+                sms_text = f"Welcome to {school_name}, {full_name}! Your {role_name} account is ready.\nUsername: {username}\nPassword: Orion@123\nAccess portal: https://orion-school.vercel.app"
+                ok, _ = send_sms(phone, sms_text, trigger_type="StaffAccountCredentials")
+                if ok:
+                    sms_count += 1
+
+        log_audit(user, "Bulk Register Staff", f"Registered {len(data)} staff profiles in bulk ({sms_count} credential SMS sent)")
+        return {"status": "success", "count": len(data), "sms_sent_count": sms_count}
     except HTTPException:
         session.rollback()
         raise
@@ -1661,10 +1691,20 @@ def reset_staff_password(staff_id: int, user=Depends(get_current_user)):
         if not staff or not staff.user:
             raise HTTPException(status_code=404, detail="User account not found")
             
-        staff.user.password_hash = hash_password("Orion@123")
+        new_pwd = "Orion@123"
+        staff.user.password_hash = hash_password(new_pwd)
         session.commit()
-        log_audit(user, "Reset Password", f"Reset staff user password for {staff.user.username} to default")
-        return {"status": "success"}
+        
+        sms_sent = False
+        if staff.phone and len(staff.phone.strip()) >= 8:
+            school_name = get_branch_setting("school_name", "ORION SCHOOL SYSTEM")
+            full_name = f"{staff.first_name or ''} {staff.last_name or ''}".strip() or staff.user.username
+            sms_text = f"Notice from {school_name}: Dear {full_name}, your portal account password has been reset to: {new_pwd}.\nUsername: {staff.user.username}\nPlease update your password after logging in."
+            sms_sent, _ = send_sms(staff.phone, sms_text, trigger_type="PasswordReset")
+            
+        log_audit(user, "Reset Password", f"Reset staff user password for {staff.user.username} to default. SMS sent: {sms_sent}")
+        msg = f"Password reset to '{new_pwd}' and sent via SMS to {staff.phone}." if sms_sent else f"Password reset to '{new_pwd}' successfully."
+        return {"status": "success", "sms_sent": sms_sent, "message": msg}
     except Exception as e:
         session.rollback()
         raise HTTPException(status_code=500, detail=str(e))

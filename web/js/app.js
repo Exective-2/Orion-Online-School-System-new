@@ -1890,7 +1890,7 @@ function loadStaff() {
                     const sid = btn.getAttribute("data-id");
                     if (confirm("Reset staff portal password to default 'Orion@123'?")) {
                         apiFetch(`/api/staff/${sid}/reset-password`, { method: "POST" })
-                            .then(() => showToast("Password reset to 'Orion@123' successfully", "success"))
+                            .then(res => showToast(res.message || "Password reset successfully and sent via SMS", "success"))
                             .catch(err => showToast(err.message, "error"));
                     }
                 });
@@ -1960,8 +1960,8 @@ document.getElementById("form-register-staff").addEventListener("submit", (e) =>
         method: "POST",
         body: payload
     })
-    .then(() => {
-        showToast("Staff registered successfully", "success");
+    .then(res => {
+        showToast(res.message || "Staff registered successfully! Credentials sent via SMS", "success");
         document.getElementById("modal-register-staff").classList.remove("show");
         document.getElementById("form-register-staff").reset();
         loadStaff();
