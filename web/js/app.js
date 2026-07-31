@@ -242,7 +242,7 @@ function triggerAppSplash(onComplete) {
 
     let progress = 0;
     const interval = setInterval(() => {
-        progress += 10;
+        progress += 5;
         if (progressFill) progressFill.style.width = progress + "%";
 
         if (statusText) {
@@ -274,10 +274,10 @@ function triggerAppSplash(onComplete) {
                     } else {
                         parseTokenAndRoute();
                     }
-                }, 100);
-            }, 60);
+                }, 150);
+            }, 150);
         }
-    }, 20);
+    }, 50);
 }
 
 function parseTokenAndRoute() {
