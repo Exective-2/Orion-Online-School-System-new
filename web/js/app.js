@@ -1268,6 +1268,7 @@ function loadPanelData(panelId) {
     else if (panelId === "panel-timetable") loadTimetablePanel();
     else if (panelId === "panel-communication") loadCommunication();
     else if (panelId === "panel-settings") loadSettings();
+    else if (panelId === "panel-support-tickets") loadBranchTickets();
     else if (panelId === "panel-sysadmin") loadSysadmin();
     else if (panelId === "panel-parent-portal") loadParentPortalData();
 }
@@ -4314,6 +4315,7 @@ function loadStudentFeeParticularsCard(studentId) {
 function loadFees() {
     initTabs("panel-fees");
     loadFinancialOverviewDashboard();
+    loadPlatformBill();
     loadFeeTemplates();
     loadFeesLedger();
     loadFinancialReport();
@@ -5381,6 +5383,9 @@ function loadSettings() {
     apiFetch("/api/settings/school-profile")
         .then(profile => {
              document.getElementById("set-school-name").value = profile.school_name || "";
+             if (document.getElementById("set-gps-address")) {
+                 document.getElementById("set-gps-address").value = profile.gps_address || "";
+             }
              document.getElementById("set-school-motto").value = profile.school_motto || "";
              document.getElementById("set-school-tagline").value = profile.school_tagline || "ORION";
              document.getElementById("set-school-phone").value = profile.school_phone || "";
@@ -5644,12 +5649,12 @@ document.getElementById("form-settings-profile")?.addEventListener("submit", asy
         }
 
         const payload = {
-            school_name: document.getElementById("set-school-name").value,
             school_motto: document.getElementById("set-school-motto").value,
             school_tagline: document.getElementById("set-school-tagline").value,
             school_phone: document.getElementById("set-school-phone").value,
             school_email: document.getElementById("set-school-email").value,
-            school_address: document.getElementById("set-school-address").value
+            school_address: document.getElementById("set-school-address").value,
+            gps_address: document.getElementById("set-gps-address")?.value || ""
         };
 
         await apiFetch("/api/settings/school-profile", { method: "PUT", body: payload });
@@ -5985,6 +5990,7 @@ window.deleteBranch = deleteBranch;
         loadSysadminAuditLogs();
         loadSysadminBroadcasts();
         loadSysadminBilling();
+        loadSysadminTickets();
     }, 150);
 }
 
@@ -6127,30 +6133,142 @@ function loadSysadminBroadcasts() {
         });
 }
 
+function loadPlatformBill() {
+    apiFetch("/api/finance/platform-bill")
+        .then(bill => {
+            if (!bill || bill.status === "error") return;
+            const termEl = document.getElementById("platform-bill-term-name");
+            const countEl = document.getElementById("platform-bill-students");
+            const rateEl = document.getElementById("platform-bill-rate");
+            const totalEl = document.getElementById("platform-bill-total-amount");
+            const badgeEl = document.getElementById("platform-bill-status-badge");
+            const payBtn = document.getElementById("btn-pay-platform-bill");
+
+            if (termEl) termEl.innerText = `${bill.academic_year} ${bill.term_name}`;
+            if (countEl) countEl.innerText = bill.student_count || 0;
+            if (rateEl) rateEl.innerText = `GHS ${(bill.fee_per_student || 0).toFixed(2)}`;
+            if (totalEl) totalEl.innerText = `GHS ${(bill.total_amount || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+            
+            const amtInput = document.getElementById("pay-platform-bill-amount");
+            if (amtInput) amtInput.value = `GHS ${(bill.total_amount || 0).toFixed(2)}`;
+
+            if (badgeEl) {
+                if (bill.status === "Approved") {
+                    badgeEl.className = "badge badge-success";
+                    badgeEl.innerText = "✓ Paid & Approved";
+                } else if (bill.status === "Paid") {
+                    badgeEl.className = "badge badge-info";
+                    badgeEl.innerText = "Pending Admin Approval";
+                } else {
+                    badgeEl.className = "badge badge-warning";
+                    badgeEl.innerText = "Pending Payment";
+                }
+            }
+
+            if (payBtn) {
+                if (bill.status === "Approved") {
+                    payBtn.disabled = true;
+                    payBtn.innerHTML = '<i class="fa-solid fa-check"></i> Bill Settled';
+                } else {
+                    payBtn.disabled = false;
+                    payBtn.innerHTML = '<i class="fa-solid fa-credit-card"></i> Pay Platform Bill';
+                }
+            }
+        })
+        .catch(err => console.error("Error loading platform bill:", err));
+}
+
+function openPayPlatformBillModal() {
+    loadPlatformBill();
+    const modal = document.getElementById("modal-pay-platform-bill");
+    if (modal) modal.style.display = "flex";
+}
+
+function closePayPlatformBillModal() {
+    const modal = document.getElementById("modal-pay-platform-bill");
+    if (modal) modal.style.display = "none";
+}
+
+document.getElementById("form-pay-platform-bill")?.addEventListener("submit", function(e) {
+    e.preventDefault();
+    const refNo = document.getElementById("pay-platform-bill-ref").value.trim();
+    if (!refNo) {
+        if (typeof showToast === "function") showToast("Payment reference number is required", "warning");
+        return;
+    }
+
+    apiFetch("/api/finance/platform-bill/pay", {
+        method: "POST",
+        body: JSON.stringify({ reference_no: refNo })
+    })
+    .then(res => {
+        if (res.status === "success") {
+            if (typeof showToast === "function") showToast("Platform bill payment submitted! Expense entry logged automatically.", "success");
+            closePayPlatformBillModal();
+            loadPlatformBill();
+            if (typeof loadFeesLedger === "function") loadFeesLedger();
+            if (typeof loadFinancialOverviewDashboard === "function") loadFinancialOverviewDashboard();
+        } else {
+            if (typeof showToast === "function") showToast(res.message || "Failed to process payment", "error");
+        }
+    })
+    .catch(err => {
+        if (typeof showToast === "function") showToast(err.message || "Error submitting payment", "error");
+    });
+});
+
 function loadSysadminBilling() {
-    apiFetch("/api/sysadmin/billing/invoices")
-        .then(invoices => {
+    apiFetch("/api/sysadmin/billing")
+        .then(bills => {
             const tbody = document.querySelector("#sys-billing-table tbody");
             if (!tbody) return;
             tbody.innerHTML = "";
-            if (!invoices || invoices.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="7">No billing records generated.</td></tr>';
+            if (!bills || bills.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="9">No platform billing records found.</td></tr>';
                 return;
             }
-            invoices.forEach(inv => {
-                const statusBadge = inv.status === "Paid" ? '<span class="badge badge-success">Settled</span>' : '<span class="badge badge-warning">Pending Invoice</span>';
+            bills.forEach(bill => {
+                const statusBadge = bill.status === "Approved" ? '<span class="badge badge-success">✓ Approved</span>' :
+                                      bill.status === "Paid" ? '<span class="badge badge-info">Paid (Pending Approval)</span>' :
+                                      '<span class="badge badge-warning">Pending Payment</span>';
+                
+                const actionBtn = bill.status === "Approved" ? '<span style="color:#34d399; font-size:12px; font-weight:700;">✓ Approved</span>' :
+                    `<button class="btn btn-sm btn-success" onclick="approvePlatformBill(${bill.id})"><i class="fa-solid fa-check"></i> Approve Payment</button>`;
+
                 tbody.innerHTML += `
                     <tr>
-                        <td><strong>${inv.invoice_no}</strong></td>
-                        <td style="font-weight:700; color:#f8fafc;">${inv.branch_name}</td>
-                        <td><strong>${inv.branch_code}</strong></td>
-                        <td><span class="badge badge-branch">${inv.active_students}</span></td>
-                        <td>GHS ${(inv.system_fee || 0).toFixed(2)}</td>
-                        <td><strong style="color:#34d399; font-size:15px;">GHS ${(inv.total_due || 0).toFixed(2)}</strong></td>
+                        <td><strong>#${bill.id}</strong></td>
+                        <td style="font-weight:700; color:#f8fafc;">${bill.branch_name}</td>
+                        <td>${bill.academic_year} ${bill.term_name}</td>
+                        <td><span class="badge badge-branch">${bill.student_count}</span></td>
+                        <td>GHS ${(bill.fee_per_student || 0).toFixed(2)}</td>
+                        <td><strong style="color:#34d399; font-size:15px;">GHS ${(bill.total_amount || 0).toFixed(2)}</strong></td>
                         <td>${statusBadge}</td>
+                        <td><code>${bill.reference_no || '—'}</code></td>
+                        <td>${actionBtn}</td>
                     </tr>`;
             });
-        });
+        })
+        .catch(err => console.error("Error loading sysadmin billing:", err));
+}
+
+function approvePlatformBill(billId) {
+    if (!confirm("Approve this platform bill payment? This will update the bill status and automatically log an Expense record in the branch ledger.")) return;
+
+    apiFetch(`/api/sysadmin/billing/${billId}/approve`, {
+        method: "POST"
+    })
+    .then(res => {
+        if (res.status === "success") {
+            if (typeof showToast === "function") showToast("Platform bill payment approved and recorded as expense in branch!", "success");
+            loadSysadminBilling();
+        } else {
+            if (typeof showToast === "function") showToast(res.message || "Failed to approve bill", "error");
+        }
+    })
+    .catch(err => {
+        if (typeof showToast === "function") showToast(err.message || "Error approving bill", "error");
+    });
 }
 
 // Global User Search Trigger
@@ -8398,4 +8516,174 @@ function deleteParent(parentId, parentName) {
     })
     .catch(err => showToast(err.message || "Failed to delete parent record", "error"));
 }
+
+// --- Support Ticket Functions ---
+
+function loadBranchTickets() {
+    apiFetch("/api/support/tickets")
+        .then(tickets => {
+            const tbody = document.querySelector("#branch-tickets-table tbody");
+            if (!tbody) return;
+            tbody.innerHTML = "";
+            if (!tickets || tickets.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="8" class="text-center">No support tickets submitted yet. Click "Submit New Support Ticket" if you need help or have a complaint.</td></tr>';
+                return;
+            }
+            tickets.forEach(t => {
+                const statusBadge = t.status === "Resolved" ? '<span class="badge badge-success">✓ Resolved</span>' :
+                                      t.status === "In Progress" ? '<span class="badge badge-info">In Progress</span>' :
+                                      t.status === "Closed" ? '<span class="badge badge-secondary">Closed</span>' :
+                                      '<span class="badge badge-warning">Pending Review</span>';
+
+                const priorityBadge = t.priority === "Critical" ? '<span class="badge badge-danger">Critical</span>' :
+                                       t.priority === "High" ? '<span class="badge badge-warning">High</span>' :
+                                       '<span class="badge badge-branch">' + t.priority + '</span>';
+
+                const adminFeedback = t.admin_response ? 
+                    `<div style="font-size:12px; background:rgba(34,197,94,0.1); border-left:3px solid #22c55e; padding:6px 10px; border-radius:4px; margin-top:4px; color:#f8fafc;">
+                        <strong>SysAdmin Response (${t.resolved_by || 'Admin'}):</strong><br>${t.admin_response}
+                     </div>` : '<em style="font-size:12px; color:var(--text-muted);">No response yet from System Administrator.</em>';
+
+                tbody.innerHTML += `
+                    <tr>
+                        <td><strong>${t.ticket_number}</strong></td>
+                        <td>${t.sender_name} (${t.sender_role})</td>
+                        <td style="font-weight:700; color:#f8fafc;">${t.subject}</td>
+                        <td>${t.category}</td>
+                        <td>${priorityBadge}</td>
+                        <td>${statusBadge}</td>
+                        <td>${t.created_at}</td>
+                        <td>${adminFeedback}</td>
+                    </tr>`;
+            });
+        })
+        .catch(err => console.error("Error loading branch tickets:", err));
+}
+
+function openCreateTicketModal() {
+    const modal = document.getElementById("modal-create-ticket");
+    if (modal) modal.style.display = "flex";
+}
+
+function closeCreateTicketModal() {
+    const modal = document.getElementById("modal-create-ticket");
+    if (modal) modal.style.display = "none";
+}
+
+document.getElementById("form-create-ticket")?.addEventListener("submit", function(e) {
+    e.preventDefault();
+    const subject = document.getElementById("ticket-subject").value.trim();
+    const category = document.getElementById("ticket-category").value;
+    const priority = document.getElementById("ticket-priority").value;
+    const description = document.getElementById("ticket-description").value.trim();
+
+    if (!subject || !description) {
+        if (typeof showToast === "function") showToast("Subject and description are required", "warning");
+        return;
+    }
+
+    apiFetch("/api/support/tickets", {
+        method: "POST",
+        body: JSON.stringify({ subject, category, priority, description })
+    })
+    .then(res => {
+        if (res.status === "success") {
+            if (typeof showToast === "function") showToast(res.message || "Support ticket submitted!", "success");
+            closeCreateTicketModal();
+            document.getElementById("form-create-ticket").reset();
+            loadBranchTickets();
+        } else {
+            if (typeof showToast === "function") showToast(res.message || "Failed to submit ticket", "error");
+        }
+    })
+    .catch(err => {
+        if (typeof showToast === "function") showToast(err.message || "Error submitting ticket", "error");
+    });
+});
+
+function loadSysadminTickets() {
+    apiFetch("/api/sysadmin/tickets")
+        .then(tickets => {
+            const tbody = document.querySelector("#sys-tickets-table tbody");
+            if (!tbody) return;
+            tbody.innerHTML = "";
+            if (!tickets || tickets.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="9" class="text-center">No branch support tickets found.</td></tr>';
+                return;
+            }
+            tickets.forEach(t => {
+                const statusBadge = t.status === "Resolved" ? '<span class="badge badge-success">✓ Resolved</span>' :
+                                      t.status === "In Progress" ? '<span class="badge badge-info">In Progress</span>' :
+                                      t.status === "Closed" ? '<span class="badge badge-secondary">Closed</span>' :
+                                      '<span class="badge badge-warning">Open</span>';
+
+                const priorityBadge = t.priority === "Critical" ? '<span class="badge badge-danger">Critical</span>' :
+                                       t.priority === "High" ? '<span class="badge badge-warning">High</span>' :
+                                       '<span class="badge badge-branch">' + t.priority + '</span>';
+
+                tbody.innerHTML += `
+                    <tr>
+                        <td><strong>${t.ticket_number}</strong></td>
+                        <td style="font-weight:700; color:#f8fafc;">${t.branch_name}</td>
+                        <td>${t.sender_name} (${t.sender_role})</td>
+                        <td style="font-weight:700;">${t.subject}</td>
+                        <td>${t.category}</td>
+                        <td>${priorityBadge}</td>
+                        <td>${statusBadge}</td>
+                        <td>${t.created_at}</td>
+                        <td>
+                            <button class="btn btn-sm btn-primary" onclick="openSysResolveTicketModal(${t.id}, '${escapeHtml(t.ticket_number)}', '${escapeHtml(t.branch_name)}', '${escapeHtml(t.sender_name)}', '${escapeHtml(t.description)}', '${t.status}', '${escapeHtml(t.admin_response || '')}')">
+                                <i class="fa-solid fa-pen-to-square"></i> Review & Resolve
+                            </button>
+                        </td>
+                    </tr>`;
+            });
+        })
+        .catch(err => console.error("Error loading sysadmin tickets:", err));
+}
+
+function openSysResolveTicketModal(id, ticketNum, branchName, senderName, description, status, responseText) {
+    document.getElementById("sys-ticket-id").value = id;
+    document.getElementById("sys-ticket-info-header").innerHTML = `<strong>Ticket #${ticketNum}</strong> — Branch: <strong>${branchName}</strong> | Sender: <strong>${senderName}</strong>`;
+    document.getElementById("sys-ticket-description").value = description;
+    document.getElementById("sys-ticket-status").value = status || "Resolved";
+    document.getElementById("sys-ticket-response").value = responseText || "";
+
+    const modal = document.getElementById("modal-sys-resolve-ticket");
+    if (modal) modal.style.display = "flex";
+}
+
+function closeSysResolveTicketModal() {
+    const modal = document.getElementById("modal-sys-resolve-ticket");
+    if (modal) modal.style.display = "none";
+}
+
+document.getElementById("form-sys-resolve-ticket")?.addEventListener("submit", function(e) {
+    e.preventDefault();
+    const ticketId = document.getElementById("sys-ticket-id").value;
+    const status = document.getElementById("sys-ticket-status").value;
+    const responseText = document.getElementById("sys-ticket-response").value.trim();
+
+    if (!responseText && (status === "Resolved" || status === "In Progress")) {
+        if (typeof showToast === "function") showToast("Resolution response feedback text is required", "warning");
+        return;
+    }
+
+    apiFetch(`/api/sysadmin/tickets/${ticketId}/resolve`, {
+        method: "POST",
+        body: JSON.stringify({ status: status, admin_response: responseText })
+    })
+    .then(res => {
+        if (res.status === "success") {
+            if (typeof showToast === "function") showToast(res.message || "Ticket updated successfully!", "success");
+            closeSysResolveTicketModal();
+            loadSysadminTickets();
+        } else {
+            if (typeof showToast === "function") showToast(res.message || "Failed to update ticket", "error");
+        }
+    })
+    .catch(err => {
+        if (typeof showToast === "function") showToast(err.message || "Error updating ticket", "error");
+    });
+});
 

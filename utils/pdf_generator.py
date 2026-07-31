@@ -25,6 +25,45 @@ def _get_pdf_dir() -> Path:
 # Module-level alias kept for backward compatibility (resolves lazily via _get_pdf_dir())
 # Do NOT call PDF_OUTPUT_DIR directly — use _get_pdf_dir() inside functions.
 
+def draw_pdf_watermark_and_footer(canvas, doc):
+    canvas.saveState()
+    try:
+        # 1. Logo Watermark (90% fade = 10% opacity)
+        logo_path = get_branch_setting("school_logo", "")
+        if logo_path:
+            if not os.path.isabs(logo_path):
+                clean_logo = logo_path.lstrip("/")
+                logo_file = os.path.join(os.path.dirname(os.path.dirname(__file__)), "web", clean_logo)
+                if not os.path.exists(logo_file):
+                    logo_file = os.path.join(os.path.dirname(os.path.dirname(__file__)), clean_logo)
+            else:
+                logo_file = logo_path
+                
+            if logo_file and os.path.exists(logo_file):
+                try:
+                    canvas.setFillAlpha(0.1) # 90% fade (10% opacity)
+                    canvas.setStrokeAlpha(0.1)
+                    page_w, page_h = doc.pagesize
+                    w, h = 220, 220
+                    x = (page_w - w) / 2.0
+                    y = (page_h - h) / 2.0
+                    canvas.drawImage(logo_file, x, y, width=w, height=h, mask='auto', preserveAspectRatio=True)
+                except Exception as w_err:
+                    pass
+
+        # 2. Footer (School Motto at bottom center, font size 8px, 50% fade)
+        school_motto = get_branch_setting("school_motto", "")
+        if school_motto:
+            canvas.setFont("Helvetica-Oblique", 8)
+            canvas.setFillColor(colors.HexColor("#64748b"))
+            canvas.setFillAlpha(0.5) # 50% fade
+            page_w, page_h = doc.pagesize
+            canvas.drawCentredString(page_w / 2.0, 15, f"{school_motto}")
+    except Exception as e:
+        print(f"PDF watermark/footer error: {e}")
+    finally:
+        canvas.restoreState()
+
 def add_pdf_header(story, title_text=None):
     from reportlab.platypus import Image
     
@@ -42,10 +81,11 @@ def add_pdf_header(story, title_text=None):
     logo_exists = bool(logo_file and os.path.exists(logo_file))
     
     school_name = get_branch_setting("school_name", "Orion School System")
-    school_motto = get_branch_setting("school_motto", "Knowledge, Integrity, Excellence")
+    school_motto = get_branch_setting("school_motto", "")
     school_phone = get_branch_setting("school_phone", "")
     school_email = get_branch_setting("school_email", "")
     school_address = get_branch_setting("school_address", "")
+    gps_address = get_branch_setting("gps_address", "")
     
     # Styles
     name_style = ParagraphStyle(
@@ -69,12 +109,14 @@ def add_pdf_header(story, title_text=None):
         info_layout.append(Paragraph(f"<i>{school_motto}</i>", details_style))
     
     contact_parts = []
+    if school_address:
+        contact_parts.append(f"Address: {school_address}")
+    if gps_address:
+        contact_parts.append(f"GPS: {gps_address}")
     if school_phone:
         contact_parts.append(f"Phone: {school_phone}")
     if school_email:
         contact_parts.append(f"Email: {school_email}")
-    if school_address:
-        contact_parts.append(f"Address: {school_address}")
         
     if contact_parts:
         info_layout.append(Paragraph(" | ".join(contact_parts), details_style))
@@ -400,7 +442,7 @@ def generate_admission_form(student_id: str, output_path: str = None) -> tuple[b
         t_sig = Table(sig_data, colWidths=[3.5*inch, 3.5*inch])
         story.append(t_sig)
         
-        doc.build(story)
+        doc.build(story, onFirstPage=draw_pdf_watermark_and_footer, onLaterPages=draw_pdf_watermark_and_footer)
         session.close()
         return True, str(file_path)
     except Exception as e:
@@ -485,7 +527,7 @@ def generate_fee_receipt(payment_id: int, output_path: str = None) -> tuple[bool
         story.append(Spacer(1, 30))
         story.append(Paragraph("Thank you for your payment. Education is the greatest legacy.", ParagraphStyle('Footer', parent=body_style, fontName='Helvetica-Oblique', alignment=1)))
         
-        doc.build(story)
+        doc.build(story, onFirstPage=draw_pdf_watermark_and_footer, onLaterPages=draw_pdf_watermark_and_footer)
         session.close()
         return True, str(file_path)
     except Exception as e:
@@ -859,7 +901,7 @@ def generate_report_card(student_id: str, examination_id: int, output_path: str 
         ]))
         story.append(t_sig)
         
-        doc.build(story)
+        doc.build(story, onFirstPage=draw_pdf_watermark_and_footer, onLaterPages=draw_pdf_watermark_and_footer)
         session.close()
         return True, str(file_path)
     except Exception as e:
@@ -1060,7 +1102,7 @@ def generate_class_report_cards(class_id: int, examination_id: int, student_ids:
             t_sig = Table(sig_data, colWidths=[3.5*inch, 3.5*inch])
             story.append(t_sig)
             
-        doc.build(story)
+        doc.build(story, onFirstPage=draw_pdf_watermark_and_footer, onLaterPages=draw_pdf_watermark_and_footer)
         session.close()
         return True, str(file_path)
     except Exception as e:
@@ -1244,7 +1286,7 @@ def generate_financial_statement(output_path: str = None) -> tuple[bool, str]:
         t_sig = Table(sig_data, colWidths=[3.5*inch, 3.5*inch])
         story.append(t_sig)
         
-        doc.build(story)
+        doc.build(story, onFirstPage=draw_pdf_watermark_and_footer, onLaterPages=draw_pdf_watermark_and_footer)
         session.close()
         return True, str(file_path)
     except Exception as e:
@@ -1342,15 +1384,40 @@ def generate_payslip_pdf(payslip, output_path: str = None):
         story.append(t_salary)
         
         # Signatures
-        story.append(Spacer(1, 30))
+        story.append(Spacer(1, 20))
+        sig_path = get_branch_setting("headteacher_signature", "")
+        sig_file = ""
+        if sig_path:
+            if os.path.isabs(sig_path):
+                sig_file = sig_path
+            else:
+                clean_sig = sig_path.lstrip("/")
+                sig_file = os.path.join(os.path.dirname(os.path.dirname(__file__)), "web", clean_sig)
+                if not os.path.exists(sig_file):
+                    sig_file = os.path.join(os.path.dirname(os.path.dirname(__file__)), clean_sig)
+                    
+        sig_exists = bool(sig_file and os.path.exists(sig_file))
+        if sig_exists:
+            try:
+                sig_img = Image(sig_file, width=90, height=30)
+                head_cell = [sig_img, Paragraph("<b>Headteacher Endorsement</b>", ParagraphStyle('HeadSig', parent=body_style, alignment=1))]
+            except Exception:
+                head_cell = Paragraph("_____________________________<br/><b>Headteacher Endorsement</b>", ParagraphStyle('HeadSig', parent=body_style, alignment=1))
+        else:
+            head_cell = Paragraph("_____________________________<br/><b>Headteacher Endorsement</b>", ParagraphStyle('HeadSig', parent=body_style, alignment=1))
+
         sig_data = [
             [Paragraph("Prepared by Bursar: ____________________", body_style),
+             head_cell,
              Paragraph("Staff Signature: ____________________", ParagraphStyle('RightSig', parent=body_style, alignment=2))]
         ]
-        t_sig = Table(sig_data, colWidths=[3.5*inch, 3.5*inch])
+        t_sig = Table(sig_data, colWidths=[2.4*inch, 2.4*inch, 2.4*inch])
+        t_sig.setStyle(TableStyle([
+            ('VALIGN', (0,0), (-1,-1), 'BOTTOM'),
+        ]))
         story.append(t_sig)
         
-        doc.build(story)
+        doc.build(story, onFirstPage=draw_pdf_watermark_and_footer, onLaterPages=draw_pdf_watermark_and_footer)
         return str(file_path), None
     except Exception as e:
         return None, str(e)
@@ -1420,7 +1487,7 @@ def generate_class_summary_pdf(class_name: str, exam_name: str, headers: list, r
         
         story.append(t)
         
-        doc.build(story)
+        doc.build(story, onFirstPage=draw_pdf_watermark_and_footer, onLaterPages=draw_pdf_watermark_and_footer)
         return True, str(file_path)
     except Exception as e:
         return False, str(e)
@@ -1489,7 +1556,7 @@ def generate_attendance_report_pdf(class_name: str, date_range: str, headers: li
         
         story.append(t)
         
-        doc.build(story)
+        doc.build(story, onFirstPage=draw_pdf_watermark_and_footer, onLaterPages=draw_pdf_watermark_and_footer)
         return True, str(file_path)
     except Exception as e:
         return False, str(e)
@@ -1588,7 +1655,7 @@ def generate_timetable_pdf(class_name: str, term_name: str, headers: list, rows:
         t.setStyle(t_style)
         story.append(t)
         
-        doc.build(story)
+        doc.build(story, onFirstPage=draw_pdf_watermark_and_footer, onLaterPages=draw_pdf_watermark_and_footer)
         return True, str(file_path)
     except Exception as e:
         return False, str(e)
@@ -1654,7 +1721,7 @@ def generate_inventory_report_pdf(headers: list, rows: list, output_path: str = 
         ]))
         
         story.append(t)
-        doc.build(story)
+        doc.build(story, onFirstPage=draw_pdf_watermark_and_footer, onLaterPages=draw_pdf_watermark_and_footer)
         return True, str(file_path)
     except Exception as e:
         return False, str(e)
@@ -1720,7 +1787,7 @@ def generate_library_report_pdf(headers: list, rows: list, output_path: str = No
         ]))
         
         story.append(t)
-        doc.build(story)
+        doc.build(story, onFirstPage=draw_pdf_watermark_and_footer, onLaterPages=draw_pdf_watermark_and_footer)
         return True, str(file_path)
     except Exception as e:
         return False, str(e)
@@ -1763,7 +1830,7 @@ def generate_ledger_report_pdf(headers: list, rows: list, output_path: str = Non
             ('ROWBACKGROUNDS', (0,1), (-1,-1), [colors.white, colors.HexColor("#f8fafc")])
         ]))
         story.append(t)
-        doc.build(story)
+        doc.build(story, onFirstPage=draw_pdf_watermark_and_footer, onLaterPages=draw_pdf_watermark_and_footer)
         return True, str(file_path)
     except Exception as e:
         print(f"Error generating ledger PDF: {e}")
@@ -1806,7 +1873,7 @@ def generate_balances_report_pdf(headers: list, rows: list, output_path: str = N
             ('ROWBACKGROUNDS', (0,1), (-1,-1), [colors.white, colors.HexColor("#f8fafc")])
         ]))
         story.append(t)
-        doc.build(story)
+        doc.build(story, onFirstPage=draw_pdf_watermark_and_footer, onLaterPages=draw_pdf_watermark_and_footer)
         return True, str(file_path)
     except Exception as e:
         print(f"Error generating balances PDF: {e}")

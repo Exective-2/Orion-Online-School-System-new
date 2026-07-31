@@ -1574,6 +1574,11 @@ def update_staff(staff_id: int, data: dict, user=Depends(get_current_user)):
         staff.qualification = data.get("qualification", staff.qualification)
         staff.base_salary = float(data.get("base_salary", staff.base_salary))
         
+        if "signature_path" in data and data["signature_path"]:
+            staff.signature_path = data["signature_path"]
+            if "headteacher" in (staff.role_title or "").lower() or "head" in (staff.role_title or "").lower() or (staff.user and staff.user.role and "head" in staff.user.role.name.lower()):
+                set_branch_setting("headteacher_signature", staff.signature_path, session=session)
+
         if staff.user:
             staff.user.email = staff.email
             if "username" in data and data["username"].strip():
@@ -1589,6 +1594,34 @@ def update_staff(staff_id: int, data: dict, user=Depends(get_current_user)):
         session.commit()
         log_audit(user, "Update Staff", f"Updated staff details and credentials for profile ID {staff_id}")
         return {"status": "success"}
+    except Exception as e:
+        session.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        session.close()
+
+@app.post("/api/staff/{staff_id}/upload-signature")
+def upload_staff_signature(staff_id: int, file: UploadFile = File(...), user=Depends(get_current_user)):
+    session = get_session()
+    try:
+        staff = session.query(Staff).filter(Staff.id == staff_id).first()
+        if not staff:
+            raise HTTPException(status_code=404, detail="Staff member not found")
+            
+        ext = Path(file.filename).suffix or ".png"
+        filename = f"staff_sig_{staff_id}_{int(time.time())}{ext}"
+        filepath = DATA_DIR / filename
+        with open(filepath, "wb") as f:
+            f.write(file.file.read())
+            
+        rel_path = str(filepath)
+        staff.signature_path = rel_path
+        
+        if "headteacher" in (staff.role_title or "").lower() or "head" in (staff.role_title or "").lower() or (staff.user and staff.user.role and "head" in staff.user.role.name.lower()):
+            set_branch_setting("headteacher_signature", rel_path, session=session)
+            
+        session.commit()
+        return {"status": "success", "signature_url": rel_path}
     except Exception as e:
         session.rollback()
         raise HTTPException(status_code=500, detail=str(e))
@@ -5096,6 +5129,7 @@ def get_school_profile(user=Depends(get_current_user)):
         "school_email": get_branch_setting("school_email", ""),
         "school_phone": get_branch_setting("school_phone", ""),
         "school_address": get_branch_setting("school_address", ""),
+        "gps_address": get_branch_setting("gps_address", ""),
         "school_logo": get_branch_setting("school_logo", ""),
         "headteacher_signature": get_branch_setting("headteacher_signature", ""),
         "curriculum": get_branch_setting("curriculum", "GES"),
@@ -5105,19 +5139,17 @@ def get_school_profile(user=Depends(get_current_user)):
 
 @app.put("/api/settings/school-profile")
 def update_school_profile(data: dict, user=Depends(get_current_user)):
-    for key in ["school_name", "school_motto", "school_tagline", "school_email", "school_phone", "school_address", "school_logo", "headteacher_signature", "curriculum", "currency", "theme"]:
+    for key in ["school_motto", "school_tagline", "school_email", "school_phone", "school_address", "gps_address", "school_logo", "curriculum", "currency", "theme"]:
         if key in data:
             set_branch_setting(key, data[key])
             
-    # Sync name/phone/email/address to Master Branch table if present
+    # Sync phone/email/address to Master Branch table if present
     branch_id = user.get("branch_id")
     if branch_id:
         try:
             m_session = get_master_session()
             b_rec = m_session.query(Branch).filter(Branch.id == branch_id).first()
             if b_rec:
-                if "school_name" in data and data["school_name"]:
-                    b_rec.name = data["school_name"]
                 if "school_phone" in data:
                     b_rec.phone = data["school_phone"]
                 if "school_email" in data:
@@ -5584,6 +5616,357 @@ def sysadmin_delete_branch(branch_id: int, user=Depends(get_current_user)):
     except Exception as e:
         m_session.rollback()
         raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        m_session.close()
+
+def sync_auto_platform_expense(branch_id: int, bill, b_sess=None):
+    """Automatically records or updates an Expense entry in the branch database when a platform bill is paid/approved."""
+    close_sess = False
+    if b_sess is None:
+        b_url = get_branch_db_url(branch_id)
+        token = current_db_url.set(b_url)
+        b_sess = get_session()
+        close_sess = True
+    try:
+        exp_desc = f"Platform Software Bill ({bill.academic_year} {bill.term_name}) - {bill.student_count} active students @ GHS {bill.fee_per_student:.2f}"
+        ref_no = bill.reference_no or f"SYSBILL-{bill.id}"
+        
+        existing = b_sess.query(Expense).filter(
+            Expense.category == "Platform Software Bill",
+            Expense.reference_no == ref_no
+        ).first()
+        
+        if not existing:
+            expense_rec = Expense(
+                title=f"Platform Bill ({bill.term_name})",
+                category="Platform Software Bill",
+                amount=bill.total_amount,
+                date=bill.paid_at.date() if bill.paid_at else datetime.date.today(),
+                description=exp_desc,
+                payment_method="Bank Transfer / Mobile Money",
+                reference_no=ref_no
+            )
+            b_sess.add(expense_rec)
+        else:
+            existing.amount = bill.total_amount
+            existing.description = exp_desc
+            if bill.paid_at:
+                existing.date = bill.paid_at.date()
+        b_sess.commit()
+    except Exception as e:
+        print(f"Notice: Failed to record platform bill expense: {e}")
+        b_sess.rollback()
+    finally:
+        if close_sess:
+            b_sess.close()
+            current_db_url.reset(token)
+
+def get_or_create_term_platform_bill(branch_id: int, b_sess=None):
+    """Computes current term platform software bill for a branch and synchronizes it with the master database."""
+    close_sess = False
+    if b_sess is None:
+        b_sess = get_session()
+        close_sess = True
+    try:
+        year_id = get_active_year_id(session=b_sess)
+        term_id = get_active_term_id(session=b_sess)
+        
+        ay_obj = b_sess.query(AcademicYear).filter(AcademicYear.id == year_id).first()
+        term_obj = b_sess.query(Term).filter(Term.id == term_id).first()
+        
+        ay_name = ay_obj.name if ay_obj else "Default Year"
+        t_name = term_obj.name if term_obj else "Term 1"
+        
+        active_student_count = b_sess.query(Student).filter(Student.status == "Active").count()
+        
+        m_session = get_master_session()
+        try:
+            from database.master_models import Branch, PlatformBill
+            branch_rec = m_session.query(Branch).filter(Branch.id == branch_id).first()
+            fee_per_student = float(getattr(branch_rec, "system_fee", 0.0) or 0.0) if branch_rec else 0.0
+            
+            bill = m_session.query(PlatformBill).filter(
+                PlatformBill.branch_id == branch_id,
+                PlatformBill.academic_year == ay_name,
+                PlatformBill.term_name == t_name
+            ).first()
+            
+            total_amt = round(active_student_count * fee_per_student, 2)
+            
+            if not bill:
+                bill = PlatformBill(
+                    branch_id=branch_id,
+                    academic_year=ay_name,
+                    term_name=t_name,
+                    student_count=active_student_count,
+                    fee_per_student=fee_per_student,
+                    total_amount=total_amt,
+                    status="Pending"
+                )
+                m_session.add(bill)
+                m_session.commit()
+                m_session.refresh(bill)
+            elif bill.status == "Pending":
+                bill.student_count = active_student_count
+                bill.fee_per_student = fee_per_student
+                bill.total_amount = total_amt
+                m_session.commit()
+                m_session.refresh(bill)
+                
+            m_session.expunge(bill)
+            return bill
+        finally:
+            m_session.close()
+    finally:
+        if close_sess:
+            b_sess.close()
+
+# --- Platform Bill Endpoints ---
+
+@app.get("/api/finance/platform-bill")
+def get_branch_platform_bill(user=Depends(get_current_user)):
+    branch_id = resolve_current_branch_id(user)
+    bill = get_or_create_term_platform_bill(branch_id)
+    if not bill:
+        return {"status": "error", "message": "Could not calculate platform bill"}
+    return {
+        "id": bill.id,
+        "branch_id": bill.branch_id,
+        "academic_year": bill.academic_year,
+        "term_name": bill.term_name,
+        "student_count": bill.student_count,
+        "fee_per_student": bill.fee_per_student,
+        "total_amount": bill.total_amount,
+        "status": bill.status,
+        "paid_at": bill.paid_at.strftime("%Y-%m-%d %H:%M") if bill.paid_at else None,
+        "reference_no": bill.reference_no or "",
+        "notes": bill.notes or ""
+    }
+
+@app.post("/api/finance/platform-bill/pay")
+def pay_branch_platform_bill(data: dict, user=Depends(get_current_user)):
+    branch_id = resolve_current_branch_id(user)
+    ref_no = data.get("reference_no", "").strip()
+    if not ref_no:
+        raise HTTPException(status_code=400, detail="Payment Reference Number is required")
+        
+    bill = get_or_create_term_platform_bill(branch_id)
+    if not bill:
+        raise HTTPException(status_code=404, detail="Platform bill record not found")
+        
+    m_session = get_master_session()
+    try:
+        from database.master_models import PlatformBill
+        mbill = m_session.query(PlatformBill).filter(PlatformBill.id == bill.id).first()
+        if mbill:
+            mbill.status = "Paid"
+            mbill.reference_no = ref_no
+            mbill.paid_at = datetime.datetime.utcnow()
+            m_session.commit()
+            
+            # Sync expense to branch DB automatically
+            sync_auto_platform_expense(branch_id, mbill)
+            
+        log_audit(user, "Pay Platform Bill", f"Submitted platform bill payment (Ref: {ref_no})")
+        return {"status": "success", "message": "Platform bill payment submitted and logged as expense."}
+    finally:
+        m_session.close()
+
+@app.get("/api/sysadmin/billing")
+def sysadmin_get_billing_records(user=Depends(get_current_user)):
+    if user.get("role") != "System Admin":
+        raise HTTPException(status_code=403, detail="Forbidden")
+        
+    m_session = get_master_session()
+    try:
+        from database.master_models import PlatformBill, Branch
+        bills = m_session.query(PlatformBill, Branch).join(Branch, PlatformBill.branch_id == Branch.id).order_by(PlatformBill.created_at.desc()).all()
+        res = []
+        for bill, br in bills:
+            res.append({
+                "id": bill.id,
+                "branch_id": br.id,
+                "branch_name": br.name,
+                "branch_code": br.code,
+                "academic_year": bill.academic_year,
+                "term_name": bill.term_name,
+                "student_count": bill.student_count,
+                "fee_per_student": bill.fee_per_student,
+                "total_amount": bill.total_amount,
+                "status": bill.status,
+                "paid_at": bill.paid_at.strftime("%Y-%m-%d %H:%M") if bill.paid_at else "—",
+                "approved_by": bill.approved_by or "—",
+                "reference_no": bill.reference_no or "—",
+                "created_at": bill.created_at.strftime("%Y-%m-%d")
+            })
+        return res
+    finally:
+        m_session.close()
+
+@app.post("/api/sysadmin/billing/{bill_id}/approve")
+def sysadmin_approve_billing(bill_id: int, data: dict = None, user=Depends(get_current_user)):
+    if user.get("role") != "System Admin":
+        raise HTTPException(status_code=403, detail="Forbidden")
+        
+    m_session = get_master_session()
+    try:
+        from database.master_models import PlatformBill
+        bill = m_session.query(PlatformBill).filter(PlatformBill.id == bill_id).first()
+        if not bill:
+            raise HTTPException(status_code=404, detail="Platform bill record not found")
+            
+        bill.status = "Approved"
+        if not bill.paid_at:
+            bill.paid_at = datetime.datetime.utcnow()
+        bill.approved_by = user.get("username", "SysAdmin")
+        if data and data.get("reference_no"):
+            bill.reference_no = data.get("reference_no").strip()
+            
+        m_session.commit()
+        
+        # Auto add/update expense in branch DB
+        sync_auto_platform_expense(bill.branch_id, bill)
+        
+        record_master_audit_log(user.get("username"), "APPROVE_BILL", f"Bill #{bill.id}", f"Approved platform bill of GHS {bill.total_amount:.2f} for branch ID {bill.branch_id}")
+        return {"status": "success", "message": "Platform bill payment approved and recorded as expense in branch."}
+    finally:
+        m_session.close()
+
+# --- Support Ticket Endpoints ---
+
+@app.get("/api/support/tickets")
+def get_branch_support_tickets(user=Depends(get_current_user)):
+    branch_id = resolve_current_branch_id(user)
+    m_session = get_master_session()
+    try:
+        from database.master_models import SupportTicket
+        tickets = m_session.query(SupportTicket).filter(
+            SupportTicket.branch_id == branch_id
+        ).order_by(SupportTicket.created_at.desc()).all()
+        return [
+            {
+                "id": t.id,
+                "ticket_number": t.ticket_number,
+                "sender_username": t.sender_username,
+                "sender_name": t.sender_name,
+                "sender_role": t.sender_role,
+                "subject": t.subject,
+                "category": t.category,
+                "priority": t.priority,
+                "description": t.description,
+                "status": t.status,
+                "admin_response": t.admin_response or "",
+                "resolved_by": t.resolved_by or "",
+                "resolved_at": t.resolved_at.strftime("%Y-%m-%d %H:%M") if t.resolved_at else "",
+                "created_at": t.created_at.strftime("%Y-%m-%d %H:%M")
+            } for t in tickets
+        ]
+    finally:
+        m_session.close()
+
+@app.post("/api/support/tickets")
+def create_support_ticket(data: dict, user=Depends(get_current_user)):
+    branch_id = resolve_current_branch_id(user)
+    subject = data.get("subject", "").strip()
+    description = data.get("description", "").strip()
+    category = data.get("category", "Technical Issue").strip()
+    priority = data.get("priority", "Medium").strip()
+    
+    if not subject or not description:
+        raise HTTPException(status_code=400, detail="Subject and description are required")
+        
+    m_session = get_master_session()
+    try:
+        from database.master_models import SupportTicket
+        import random
+        import string
+        ticket_num = f"TCK-{datetime.datetime.now().strftime('%Y%m%d')}-{''.join(random.choices(string.digits, k=4))}"
+        
+        ticket = SupportTicket(
+            ticket_number=ticket_num,
+            branch_id=branch_id,
+            sender_username=user.get("username", "Unknown"),
+            sender_name=user.get("full_name") or user.get("username", "Branch Admin"),
+            sender_role=user.get("role", "Branch Admin"),
+            subject=subject,
+            category=category,
+            priority=priority,
+            description=description,
+            status="Open"
+        )
+        m_session.add(ticket)
+        m_session.commit()
+        
+        log_audit(user, "Create Support Ticket", f"Created support ticket #{ticket_num}: {subject}")
+        return {"status": "success", "message": f"Support ticket #{ticket_num} created successfully!", "ticket_number": ticket_num}
+    finally:
+        m_session.close()
+
+@app.get("/api/sysadmin/tickets")
+def sysadmin_get_support_tickets(user=Depends(get_current_user)):
+    if user.get("role") != "System Admin":
+        raise HTTPException(status_code=403, detail="Forbidden")
+        
+    m_session = get_master_session()
+    try:
+        from database.master_models import SupportTicket, Branch
+        tickets = m_session.query(SupportTicket, Branch).join(
+            Branch, SupportTicket.branch_id == Branch.id
+        ).order_by(SupportTicket.created_at.desc()).all()
+        
+        res = []
+        for t, br in tickets:
+            res.append({
+                "id": t.id,
+                "ticket_number": t.ticket_number,
+                "branch_id": br.id,
+                "branch_name": br.name,
+                "branch_code": br.code,
+                "sender_username": t.sender_username,
+                "sender_name": t.sender_name,
+                "sender_role": t.sender_role,
+                "subject": t.subject,
+                "category": t.category,
+                "priority": t.priority,
+                "description": t.description,
+                "status": t.status,
+                "admin_response": t.admin_response or "",
+                "resolved_by": t.resolved_by or "",
+                "resolved_at": t.resolved_at.strftime("%Y-%m-%d %H:%M") if t.resolved_at else "",
+                "created_at": t.created_at.strftime("%Y-%m-%d %H:%M")
+            })
+        return res
+    finally:
+        m_session.close()
+
+@app.post("/api/sysadmin/tickets/{ticket_id}/resolve")
+def sysadmin_resolve_support_ticket(ticket_id: int, data: dict, user=Depends(get_current_user)):
+    if user.get("role") != "System Admin":
+        raise HTTPException(status_code=403, detail="Forbidden")
+        
+    status = data.get("status", "Resolved").strip()
+    response_text = data.get("admin_response", "").strip()
+    
+    if not response_text and status in ["Resolved", "In Progress"]:
+        raise HTTPException(status_code=400, detail="Resolution response feedback text is required")
+        
+    m_session = get_master_session()
+    try:
+        from database.master_models import SupportTicket
+        ticket = m_session.query(SupportTicket).filter(SupportTicket.id == ticket_id).first()
+        if not ticket:
+            raise HTTPException(status_code=404, detail="Support ticket not found")
+            
+        ticket.status = status
+        ticket.admin_response = response_text
+        ticket.resolved_by = user.get("username", "SysAdmin")
+        if status in ["Resolved", "Closed"]:
+            ticket.resolved_at = datetime.datetime.utcnow()
+        ticket.updated_at = datetime.datetime.utcnow()
+        
+        m_session.commit()
+        record_master_audit_log(user.get("username"), "RESOLVE_TICKET", f"Ticket #{ticket.ticket_number}", f"Updated ticket status to '{status}' with feedback")
+        return {"status": "success", "message": f"Support ticket #{ticket.ticket_number} updated to {status}!"}
     finally:
         m_session.close()
 

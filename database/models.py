@@ -143,6 +143,7 @@ class Staff(Base):
     status = Column(String(20), default="Active")  # "Active", "Resigned", "Suspended"
     address = Column(String(200), nullable=True)
     photo_path = Column(String(255), nullable=True)
+    signature_path = Column(String(255), nullable=True)
     qualification = Column(String(100), nullable=True)
     base_salary = Column(Float, default=0.0)
     

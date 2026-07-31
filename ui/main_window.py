@@ -84,9 +84,10 @@ class MainWindow(QMainWindow):
         sidebar_layout.setSpacing(8)
         
         # School logo/motto header
+        from utils.branch_config import get_branch_setting
         school_logo = QLabel()
         school_logo.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        logo_path = config.get("school_logo", "")
+        logo_path = get_branch_setting("school_logo", "")
         if logo_path and os.path.exists(logo_path):
             pixmap = QPixmap(logo_path)
             scaled = pixmap.scaled(60, 60, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
@@ -95,7 +96,7 @@ class MainWindow(QMainWindow):
             school_logo.setText("ORION")
             school_logo.setStyleSheet("font-size: 24px; font-weight: bold; color: #3b82f6; padding: 10px;")
             
-        motto = QLabel(config.get("school_motto", ""))
+        motto = QLabel(get_branch_setting("school_motto", ""))
         motto.setStyleSheet("font-size: 10px; color: #64748b; font-style: italic; margin-bottom: 20px;")
         motto.setAlignment(Qt.AlignmentFlag.AlignCenter)
         motto.setWordWrap(True)
@@ -128,7 +129,7 @@ class MainWindow(QMainWindow):
             from database.branch_context import get_active_branch_name
             branch_display = get_active_branch_name()
         except Exception:
-            branch_display = config.get('school_name', '')
+            branch_display = get_branch_setting('school_name', '')
         term_label = QLabel(f"📍 {branch_display} | Term 1")
         term_label.setStyleSheet("color: #64748b; font-weight: bold; margin-right: 15px;")
         header_layout.addWidget(term_label)

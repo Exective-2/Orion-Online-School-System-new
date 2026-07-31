@@ -147,6 +147,7 @@ def init_db(force: bool = False):
     with engine.begin() as conn:
         for col_def in [
             "ALTER TABLE staff ADD COLUMN base_salary FLOAT DEFAULT 0.0;",
+            "ALTER TABLE staff ADD COLUMN signature_path VARCHAR(255);",
             "ALTER TABLE student_report_remarks ADD COLUMN student_interest VARCHAR(250);",
             "ALTER TABLE student_report_remarks ADD COLUMN attitude_score VARCHAR(100);",
             "ALTER TABLE student_report_remarks ADD COLUMN overall_score FLOAT DEFAULT 0.0;",

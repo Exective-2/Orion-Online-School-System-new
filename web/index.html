@@ -371,6 +371,7 @@
                             <li><a href="#" class="nav-link" data-target="panel-timetable"><i class="fa-solid fa-calendar-days"></i> Timetables</a></li>
                             <li><a href="#" class="nav-link" data-target="panel-communication"><i class="fa-solid fa-message"></i> Communication</a></li>
                             <li><a href="#" class="nav-link" data-target="panel-settings"><i class="fa-solid fa-sliders"></i> Configurations</a></li>
+                            <li><a href="#" class="nav-link" data-target="panel-support-tickets"><i class="fa-solid fa-headset"></i> Help & Support Tickets</a></li>
                             <li id="sidebar-sysadmin-link" class="sysadmin-only" style="display: none;">
                                 <a href="#" class="nav-link" data-target="panel-sysadmin"><i class="fa-solid fa-shield-halved"></i> System Admin</a>
                             </li>
@@ -1627,6 +1628,26 @@
                                                 <div style="font-size: 11px; color: var(--text-muted);">Inflows minus Outflows</div>
                                             </div>
                                         </div>
+                                    <!-- Platform Software Bill Banner Card -->
+                                    <div id="platform-bill-card" class="glass-panel p-20 mb-20" style="border: 1px solid rgba(59, 130, 246, 0.3); background: rgba(59, 130, 246, 0.05);">
+                                        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px;">
+                                            <div>
+                                                <div style="display: flex; align-items: center; gap: 10px;">
+                                                    <h3 style="margin:0; font-size:18px; color: #3b82f6;"><i class="fa-solid fa-server"></i> Platform Software Bill — System Administrator</h3>
+                                                    <span id="platform-bill-status-badge" class="badge badge-warning" style="font-size: 12px; padding: 4px 10px;">Pending</span>
+                                                </div>
+                                                <p class="desc" style="margin-top: 6px; margin-bottom: 0;">
+                                                    Term Software Fee: <strong id="platform-bill-term-name">—</strong> | Active Students: <strong id="platform-bill-students">0</strong> @ <strong id="platform-bill-rate">GHS 0.00</strong>/student
+                                                </p>
+                                            </div>
+                                            <div style="display: flex; align-items: center; gap: 15px;">
+                                                <div style="text-align: right;">
+                                                    <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase; font-weight: 700;">Total Bill Amount</div>
+                                                    <h2 id="platform-bill-total-amount" style="margin:0; color: #3b82f6; font-size: 22px; font-weight: 800;">GHS 0.00</h2>
+                                                </div>
+                                                <button class="btn btn-primary" id="btn-pay-platform-bill" onclick="openPayPlatformBillModal()"><i class="fa-solid fa-credit-card"></i> Pay Platform Bill</button>
+                                            </div>
+                                        </div>
                                     </div>
 
                                     <!-- Quick Live Student Fee Lookup -->
@@ -2562,8 +2583,8 @@
                                     <form id="form-settings-profile">
                                         <div class="form-grid">
                                             <div class="form-group">
-                                                <label>School Name</label>
-                                                <input type="text" id="set-school-name" class="form-control">
+                                                <label>School Name (Configured by System Admin)</label>
+                                                <input type="text" id="set-school-name" class="form-control" readonly disabled style="opacity:0.7; cursor:not-allowed;" title="School Name is configured by System Administrator">
                                             </div>
                                             <div class="form-group">
                                                 <label>School Motto</label>
@@ -2586,6 +2607,10 @@
                                                 <label>Physical Address</label>
                                                 <input type="text" id="set-school-address" class="form-control">
                                             </div>
+                                            <div class="form-group">
+                                                <label>GPS Address</label>
+                                                <input type="text" id="set-gps-address" class="form-control" placeholder="e.g. AK-039-5028">
+                                            </div>
 
                                             <div class="form-group">
                                                 <label>School Logo Upload</label>
@@ -2594,15 +2619,6 @@
                                                     <input type="file" id="set-logo-file" class="form-control" accept="image/*">
                                                 </div>
                                                 <small style="font-size:11px; color:var(--text-muted);">Displays on Header, Report Cards & Exported PDFs</small>
-                                            </div>
-
-                                            <div class="form-group">
-                                                <label>Headteacher Signature Upload</label>
-                                                <div style="display: flex; align-items: center; gap: 15px;">
-                                                    <img id="set-signature-preview" src="" style="display: none; width: 120px; height: 45px; object-fit: contain; border-radius: 6px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);" onerror="this.style.display='none';">
-                                                    <input type="file" id="set-signature-file" class="form-control" accept="image/*">
-                                                </div>
-                                                <small style="font-size:11px; color:var(--text-muted);">Endorsement signature rendered on Student Report Cards</small>
                                             </div>
                                         </div>
                                         <button type="submit" class="btn btn-success mt-15"><i class="fa-solid fa-floppy-disk"></i> Save Profile Details</button>
@@ -2770,6 +2786,40 @@
                         </div>
 
                         
+                        <!-- PANEL: HELP & SUPPORT TICKETS -->
+                        <div id="panel-support-tickets" class="content-panel">
+                            <div class="panel-header-with-actions">
+                                <div>
+                                    <h1><i class="fa-solid fa-headset" style="color: var(--accent-primary);"></i> Help & Support Center</h1>
+                                    <p>Report complaints or technical issues directly to the System Administrator and view resolution feedback.</p>
+                                </div>
+                                <div class="header-actions-row">
+                                    <button class="btn btn-primary" onclick="openCreateTicketModal()"><i class="fa-solid fa-plus"></i> Submit New Support Ticket</button>
+                                </div>
+                            </div>
+
+                            <div class="glass-panel p-20 mt-15">
+                                <h3 style="margin: 0 0 15px 0;"><i class="fa-solid fa-ticket"></i> My Support & Complaint Tickets</h3>
+                                <table class="table" id="branch-tickets-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Ticket #</th>
+                                            <th>Sender Name (Role)</th>
+                                            <th>Subject</th>
+                                            <th>Category</th>
+                                            <th>Priority</th>
+                                            <th>Status</th>
+                                            <th>Date Sent</th>
+                                            <th>Actions & System Admin Feedback</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr><td colspan="8">Loading support tickets...</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
                         <!-- PANEL 12: SYSTEM ADMIN PORTAL -->
                         <div id="panel-sysadmin" class="content-panel">
                             <div class="panel-header-with-actions">
@@ -2819,6 +2869,7 @@
                                     <button class="tab-btn" data-tab="tab-sys-audit"><i class="fa-solid fa-shield-halved"></i> Master Audit Logs</button>
                                     <button class="tab-btn" data-tab="tab-sys-broadcasts"><i class="fa-solid fa-bullhorn"></i> Global Broadcasts</button>
                                     <button class="tab-btn" data-tab="tab-sys-billing"><i class="fa-solid fa-file-invoice-dollar"></i> Platform Billing</button>
+                                    <button class="tab-btn" data-tab="tab-sys-tickets"><i class="fa-solid fa-headset"></i> Support Tickets</button>
                                     <button class="tab-btn" data-tab="tab-sys-admins"><i class="fa-solid fa-user-shield"></i> System Admins</button>
                                 </div>
                                 
@@ -3099,30 +3150,56 @@
                                         </thead>
                                         <tbody>
                                             <tr><td colspan="6">Loading active broadcasts...</td></tr>
-                                        </tbody>
-                                    </table>
-                                </div>
-
-                                <!-- Tab 7: Platform Billing -->
+                                                                        <!-- Tab 7: Platform Billing -->
                                 <div class="tab-content" id="tab-sys-billing">
                                     <table class="table" id="sys-billing-table">
                                         <thead>
                                             <tr>
-                                                <th>Invoice No.</th>
+                                                <th>Bill ID</th>
                                                 <th>School Branch</th>
-                                                <th>Branch Code</th>
+                                                <th>Academic Term</th>
                                                 <th>Active Students</th>
                                                 <th>System Fee / Student</th>
                                                 <th>Total Amount Due</th>
                                                 <th>Payment Status</th>
+                                                <th>Reference No</th>
+                                                <th>Actions</th>
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            <tr><td colspan="7">Loading platform billing statements...</td></tr>
+                                            <tr><td colspan="9">Loading platform billing statements...</td></tr>
                                         </tbody>
+                                    </table>
+                                </div>   </tbody>
                                     </table>
                                 </div>
                                 
+                                <!-- Tab: Support Tickets -->
+                                <div class="tab-content" id="tab-sys-tickets">
+                                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+                                        <h3 style="margin:0;"><i class="fa-solid fa-headset" style="color: #3b82f6;"></i> Branch Help & Support Tickets</h3>
+                                        <button class="btn btn-secondary btn-sm" onclick="loadSysadminTickets()"><i class="fa-solid fa-arrows-rotate"></i> Refresh Tickets</button>
+                                    </div>
+                                    <table class="table" id="sys-tickets-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Ticket #</th>
+                                                <th>School Branch</th>
+                                                <th>Sender Name (Role)</th>
+                                                <th>Subject</th>
+                                                <th>Category</th>
+                                                <th>Priority</th>
+                                                <th>Status</th>
+                                                <th>Date Sent</th>
+                                                <th>Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr><td colspan="9">Loading branch support tickets...</td></tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+
                                 <!-- Tab 8: System Admins -->
                                 <div class="tab-content" id="tab-sys-admins">
                                     <table class="table" id="sys-admins-table">
@@ -3760,6 +3837,14 @@
                         <div class="form-group">
                             <label>Base Salary (GHS)</label>
                             <input type="number" step="0.01" id="edit-staff-salary" class="form-control">
+                        </div>
+                        <div class="form-group full-width">
+                            <label>Signature Upload (For Headteacher / Authorization)</label>
+                            <div style="display: flex; align-items: center; gap: 15px;">
+                                <img id="edit-staff-signature-preview" src="" style="display: none; width: 120px; height: 45px; object-fit: contain; border-radius: 6px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);" onerror="this.style.display='none';">
+                                <input type="file" id="edit-staff-signature-file" class="form-control" accept="image/*">
+                            </div>
+                            <small style="font-size:11px; color:var(--text-muted);">Uploaded signature will be rendered on payroll documents and approved report cards for Headteacher.</small>
                         </div>
                     </div>
                 </div>
@@ -5083,6 +5168,122 @@
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary btn-modal-cancel">Cancel</button>
                     <button type="submit" class="btn btn-primary" style="font-weight:800;"><i class="fa-solid fa-paper-plane"></i> Dispatch Message</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Pay Platform Bill Modal -->
+    <div class="modal" id="modal-pay-platform-bill">
+        <div class="modal-dialog glass-panel" style="max-width: 480px;">
+            <div class="modal-header">
+                <h3><i class="fa-solid fa-receipt" style="color: #3b82f6;"></i> Submit Platform Bill Payment</h3>
+                <button class="modal-close" onclick="closePayPlatformBillModal()">&times;</button>
+            </div>
+            <form id="form-pay-platform-bill">
+                <div class="modal-body">
+                    <div class="alert alert-info mb-15">
+                        Submitting payment updates bill status to <strong>Paid</strong> and automatically adds a corresponding entry in your <strong>Expense Ledger</strong>.
+                    </div>
+                    <div class="form-group mb-15">
+                        <label>Total Bill Amount</label>
+                        <input type="text" id="pay-platform-bill-amount" class="form-control" readonly style="font-weight: 700; color: #3b82f6;" />
+                    </div>
+                    <div class="form-group mb-15">
+                        <label>Payment Reference Number / Mobile Money Transaction ID *</label>
+                        <input type="text" id="pay-platform-bill-ref" class="form-control" placeholder="e.g. TXN-99882211 or MOMO-445566" required />
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" onclick="closePayPlatformBillModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary"><i class="fa-solid fa-check"></i> Submit Payment & Record Expense</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal: System Admin Resolve Support Ticket -->
+    <div class="modal" id="modal-sys-resolve-ticket">
+        <div class="modal-dialog glass-panel" style="max-width: 580px;">
+            <div class="modal-header">
+                <h3><i class="fa-solid fa-headset" style="color: #3b82f6;"></i> Review & Resolve Support Ticket</h3>
+                <button class="modal-close" onclick="closeSysResolveTicketModal()">&times;</button>
+            </div>
+            <form id="form-sys-resolve-ticket">
+                <div class="modal-body">
+                    <input type="hidden" id="sys-ticket-id" />
+                    <div class="alert alert-info mb-15" id="sys-ticket-info-header">
+                        Loading ticket details...
+                    </div>
+                    <div class="form-group mb-12">
+                        <label>Problem Description</label>
+                        <textarea id="sys-ticket-description" class="form-control" rows="3" readonly style="background: rgba(15,23,42,0.6);"></textarea>
+                    </div>
+                    <div class="form-group mb-12">
+                        <label>Update Status *</label>
+                        <select id="sys-ticket-status" class="form-control" style="font-weight: 700;">
+                            <option value="Resolved">Resolved (Issue Fixed)</option>
+                            <option value="In Progress">In Progress (Under Review)</option>
+                            <option value="Open">Open</option>
+                            <option value="Closed">Closed</option>
+                        </select>
+                    </div>
+                    <div class="form-group mb-12">
+                        <label>Resolution Feedback / Response for Headteacher / Admin *</label>
+                        <textarea id="sys-ticket-response" class="form-control" rows="4" placeholder="Type solution details, instructions, or resolution feedback here..." required></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" onclick="closeSysResolveTicketModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary" style="font-weight:700;"><i class="fa-solid fa-paper-plane"></i> Save & Send Feedback</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal: Create Support Ticket -->
+    <div class="modal" id="modal-create-ticket">
+        <div class="modal-dialog glass-panel" style="max-width: 540px;">
+            <div class="modal-header">
+                <h3><i class="fa-solid fa-headset" style="color: #3b82f6;"></i> Submit Help & Support Ticket</h3>
+                <button class="modal-close" onclick="closeCreateTicketModal()">&times;</button>
+            </div>
+            <form id="form-create-ticket">
+                <div class="modal-body">
+                    <div class="alert alert-info mb-15">
+                        Your issue/complaint will be sent directly to the <strong>System Administrator</strong>. You will receive notification & resolution feedback here once reviewed.
+                    </div>
+                    <div class="form-group mb-12">
+                        <label>Subject / Brief Summary *</label>
+                        <input type="text" id="ticket-subject" class="form-control" placeholder="e.g. Unable to submit payroll / System Fee Inquiry" required />
+                    </div>
+                    <div class="form-group mb-12">
+                        <label>Category *</label>
+                        <select id="ticket-category" class="form-control" style="font-weight: 700;">
+                            <option value="Technical Issue">Technical Issue / Bug</option>
+                            <option value="Billing / System Fee">Billing & System Fee</option>
+                            <option value="Account / Access">Account / Access Rights</option>
+                            <option value="Feature Request">Feature Request</option>
+                            <option value="General Inquiry">General Inquiry</option>
+                        </select>
+                    </div>
+                    <div class="form-group mb-12">
+                        <label>Priority Level *</label>
+                        <select id="ticket-priority" class="form-control" style="font-weight: 700;">
+                            <option value="Low">Low (General question)</option>
+                            <option value="Medium" selected>Medium (Standard request)</option>
+                            <option value="High">High (Urgent work blocker)</option>
+                            <option value="Critical">Critical (System emergency)</option>
+                        </select>
+                    </div>
+                    <div class="form-group mb-12">
+                        <label>Problem Description / Details *</label>
+                        <textarea id="ticket-description" class="form-control" rows="5" placeholder="Provide full details of the problem or complaint..." required></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" onclick="closeCreateTicketModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary" style="font-weight:700;"><i class="fa-solid fa-paper-plane"></i> Submit Ticket</button>
                 </div>
             </form>
         </div>

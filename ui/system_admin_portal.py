@@ -91,6 +91,10 @@ class CreateBranchDialog(QDialog):
         self.address_input.setPlaceholderText("Street / town address")
         self.address_input.setMinimumHeight(34)
 
+        self.gps_address_input = QLineEdit()
+        self.gps_address_input.setPlaceholderText("e.g. AK-039-5028")
+        self.gps_address_input.setMinimumHeight(34)
+
         self.phone_input = QLineEdit(self.branch.phone or "" if self.branch else "")
         self.phone_input.setPlaceholderText("+233 24 000 0000")
         self.phone_input.setMinimumHeight(34)
@@ -99,6 +103,17 @@ class CreateBranchDialog(QDialog):
         self.email_input.setPlaceholderText("branch@school.edu.gh")
         self.email_input.setMinimumHeight(34)
 
+        self.logo_path_label = QLabel("No logo uploaded")
+        self.logo_path_label.setStyleSheet("color: #64748b; font-style: italic;")
+        self.upload_logo_btn = QPushButton("Upload Logo")
+        self.upload_logo_btn.setObjectName("secondary_btn")
+        self.upload_logo_btn.clicked.connect(self._select_logo)
+        self.selected_logo_path = ""
+
+        logo_layout = QHBoxLayout()
+        logo_layout.addWidget(self.logo_path_label, stretch=3)
+        logo_layout.addWidget(self.upload_logo_btn, stretch=1)
+
         self.notes_input = QLineEdit(self.branch.notes or "" if self.branch else "")
         self.notes_input.setPlaceholderText("Optional internal notes")
         self.notes_input.setMinimumHeight(34)
@@ -106,8 +121,10 @@ class CreateBranchDialog(QDialog):
         form.addRow("Branch Name *", self.name_input)
         form.addRow("Branch Code *", self.code_input)
         form.addRow("Address", self.address_input)
+        form.addRow("GPS Address", self.gps_address_input)
         form.addRow("Phone", self.phone_input)
         form.addRow("Email", self.email_input)
+        form.addRow("Branch Logo", logo_layout)
         form.addRow("Notes", self.notes_input)
         layout.addLayout(form)
 
@@ -133,13 +150,23 @@ class CreateBranchDialog(QDialog):
         btn_row.addWidget(save_btn)
         layout.addLayout(btn_row)
 
+    def _select_logo(self):
+        file_path, _ = QFileDialog.getOpenFileName(
+            self, "Select Branch Logo", "", "Image Files (*.png *.jpg *.jpeg *.bmp)"
+        )
+        if file_path:
+            self.logo_path_label.setText(Path(file_path).name)
+            self.selected_logo_path = file_path
+
     def get_data(self) -> dict:
         return {
             "name": self.name_input.text().strip(),
             "code": self.code_input.text().strip().upper().replace(" ", "_"),
             "address": self.address_input.text().strip(),
+            "gps_address": self.gps_address_input.text().strip(),
             "phone": self.phone_input.text().strip(),
             "email": self.email_input.text().strip(),
+            "logo": getattr(self, 'selected_logo_path', ''),
             "notes": self.notes_input.text().strip(),
         }
 
@@ -370,14 +397,20 @@ class SystemAdminPortal(QMainWindow):
         self.overview_tab = QWidget()
         self.branches_tab = QWidget()
         self.admins_tab = QWidget()
+        self.billing_tab = QWidget()
+        self.tickets_tab = QWidget()
 
         self.tabs.addTab(self.overview_tab, "📊  System Overview")
         self.tabs.addTab(self.branches_tab, "🏫  Branch Management")
         self.tabs.addTab(self.admins_tab, "👤  Admin Accounts")
+        self.tabs.addTab(self.billing_tab, "💳  Platform Billing")
+        self.tabs.addTab(self.tickets_tab, "🎫  Support Tickets")
 
         self._build_overview_tab()
         self._build_branches_tab()
         self._build_admins_tab()
+        self._build_billing_tab()
+        self._build_tickets_tab()
 
         root.addWidget(self.tabs)
 
@@ -535,6 +568,225 @@ class SystemAdminPortal(QMainWindow):
         self.load_overview()
         self.load_branches_table()
         self.load_admins_table()
+        self.load_billing_table()
+        self.load_tickets_table()
+
+    def _build_tickets_tab(self):
+        layout = QVBoxLayout(self.tickets_tab)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(15)
+
+        top_row = QHBoxLayout()
+        lbl = QLabel("🎫  Support & Help Tickets from School Branches")
+        lbl.setStyleSheet("font-size: 16px; font-weight: bold; color: #3b82f6;")
+        top_row.addWidget(lbl)
+        top_row.addStretch()
+
+        refresh_btn = QPushButton("🔄 Refresh Tickets")
+        refresh_btn.setObjectName("secondary_btn")
+        refresh_btn.clicked.connect(self.load_tickets_table)
+        top_row.addWidget(refresh_btn)
+
+        layout.addLayout(top_row)
+
+        self.tickets_table = QTableWidget()
+        self.tickets_table.setColumnCount(9)
+        self.tickets_table.setHorizontalHeaderLabels([
+            "Ticket #", "Branch Name", "Sender", "Subject", "Category", "Priority", "Status", "Date Created", "Actions"
+        ])
+        self.tickets_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self.tickets_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+
+        layout.addWidget(self.tickets_table)
+
+    def load_tickets_table(self):
+        self.tickets_table.setRowCount(0)
+        from database.master_connection import get_master_session
+        from database.master_models import SupportTicket, Branch
+        session = get_master_session()
+        try:
+            records = session.query(SupportTicket, Branch).join(Branch, SupportTicket.branch_id == Branch.id).order_by(SupportTicket.created_at.desc()).all()
+            self.tickets_table.setRowCount(len(records))
+            for row_idx, (t, br) in enumerate(records):
+                self.tickets_table.setItem(row_idx, 0, _ro_item(t.ticket_number))
+                self.tickets_table.setItem(row_idx, 1, _ro_item(br.name))
+                self.tickets_table.setItem(row_idx, 2, _ro_item(f"{t.sender_name} ({t.sender_role})"))
+                self.tickets_table.setItem(row_idx, 3, _ro_item(t.subject))
+                self.tickets_table.setItem(row_idx, 4, _ro_item(t.category))
+                self.tickets_table.setItem(row_idx, 5, _ro_item(t.priority))
+                
+                status_item = _status_item(t.status, t.status == "Resolved")
+                self.tickets_table.setItem(row_idx, 6, status_item)
+                self.tickets_table.setItem(row_idx, 7, _ro_item(t.created_at.strftime("%Y-%m-%d %H:%M")))
+                
+                rev_btn = QPushButton("Review & Resolve")
+                rev_btn.setStyleSheet("background-color: #3b82f6; color: white; border-radius: 4px; font-size: 11px; padding: 4px 8px;")
+                rev_btn.clicked.connect(lambda _, t_id=t.id: self._resolve_ticket_dialog(t_id))
+                self.tickets_table.setCellWidget(row_idx, 8, rev_btn)
+                self.tickets_table.setRowHeight(row_idx, 36)
+        except Exception as e:
+            print(f"Error loading tickets table: {e}")
+        finally:
+            session.close()
+
+    def _resolve_ticket_dialog(self, ticket_id: int):
+        from database.master_connection import get_master_session
+        from database.master_models import SupportTicket, Branch
+        session = get_master_session()
+        try:
+            res = session.query(SupportTicket, Branch).join(Branch, SupportTicket.branch_id == Branch.id).filter(SupportTicket.id == ticket_id).first()
+            if not res:
+                return
+            t, br = res
+
+            dialog = QDialog(self)
+            dialog.setWindowTitle(f"Support Ticket #{t.ticket_number}")
+            dialog.setMinimumWidth(500)
+            d_lay = QVBoxLayout(dialog)
+            d_lay.setSpacing(12)
+
+            info_lbl = QLabel(f"<b>Branch:</b> {br.name}<br><b>Sender:</b> {t.sender_name} ({t.sender_role})<br><b>Category:</b> {t.category} | <b>Priority:</b> {t.priority}")
+            d_lay.addWidget(info_lbl)
+
+            subj_lbl = QLabel(f"<b>Subject:</b> {t.subject}")
+            d_lay.addWidget(subj_lbl)
+
+            desc_box = QTextEdit()
+            desc_box.setPlainText(t.description)
+            desc_box.setReadOnly(True)
+            desc_box.setMaximumHeight(100)
+            d_lay.addWidget(QLabel("<b>Problem Description:</b>"))
+            d_lay.addWidget(desc_box)
+
+            status_combo = QComboBox()
+            status_combo.addItems(["Resolved", "In Progress", "Open", "Closed"])
+            status_combo.setCurrentText(t.status)
+            d_lay.addWidget(QLabel("<b>Update Ticket Status:</b>"))
+            d_lay.addWidget(status_combo)
+
+            resp_box = QTextEdit()
+            resp_box.setPlaceholderText("Enter resolution details / feedback for the headteacher or admin...")
+            resp_box.setPlainText(t.admin_response or "")
+            d_lay.addWidget(QLabel("<b>System Admin Resolution Feedback:</b>"))
+            d_lay.addWidget(resp_box)
+
+            btn_row = QHBoxLayout()
+            cancel_b = QPushButton("Cancel")
+            cancel_b.clicked.connect(dialog.reject)
+            save_b = QPushButton("Save & Send Feedback")
+            save_b.setStyleSheet("background-color: #22c55e; color: white; font-weight: bold; padding: 6px 12px;")
+
+            def do_save():
+                resp_text = resp_box.toPlainText().strip()
+                new_status = status_combo.currentText()
+                if not resp_text and new_status in ["Resolved", "In Progress"]:
+                    QMessageBox.warning(dialog, "Warning", "Please provide resolution feedback text.")
+                    return
+                t.status = new_status
+                t.admin_response = resp_text
+                t.resolved_by = self.sysadmin.username
+                if new_status in ["Resolved", "Closed"]:
+                    t.resolved_at = datetime.datetime.utcnow()
+                session.commit()
+                QMessageBox.information(dialog, "Success", f"✅ Ticket #{t.ticket_number} updated successfully!")
+                dialog.accept()
+                self.load_tickets_table()
+
+            save_b.clicked.connect(do_save)
+            btn_row.addStretch()
+            btn_row.addWidget(cancel_b)
+            btn_row.addWidget(save_b)
+            d_lay.addLayout(btn_row)
+
+            dialog.exec()
+        finally:
+            session.close()
+
+    def _build_billing_tab(self):
+        layout = QVBoxLayout(self.billing_tab)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(15)
+
+        top_row = QHBoxLayout()
+        lbl = QLabel("💳  School Branch Platform Billing Records")
+        lbl.setStyleSheet("font-size: 16px; font-weight: bold; color: #3b82f6;")
+        top_row.addWidget(lbl)
+        top_row.addStretch()
+
+        refresh_btn = QPushButton("🔄 Refresh Billing")
+        refresh_btn.setObjectName("secondary_btn")
+        refresh_btn.clicked.connect(self.load_billing_table)
+        top_row.addWidget(refresh_btn)
+
+        layout.addLayout(top_row)
+
+        self.billing_table = QTableWidget()
+        self.billing_table.setColumnCount(9)
+        self.billing_table.setHorizontalHeaderLabels([
+            "Bill ID", "Branch Name", "Academic Term", "Active Students", "Fee/Student", "Total Bill", "Status", "Reference No", "Actions"
+        ])
+        self.billing_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self.billing_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+
+        layout.addWidget(self.billing_table)
+
+    def load_billing_table(self):
+        self.billing_table.setRowCount(0)
+        from database.master_connection import get_master_session
+        from database.master_models import PlatformBill, Branch
+        session = get_master_session()
+        try:
+            records = session.query(PlatformBill, Branch).join(Branch, PlatformBill.branch_id == Branch.id).order_by(PlatformBill.created_at.desc()).all()
+            self.billing_table.setRowCount(len(records))
+            for row_idx, (bill, br) in enumerate(records):
+                self.billing_table.setItem(row_idx, 0, _ro_item(str(bill.id)))
+                self.billing_table.setItem(row_idx, 1, _ro_item(br.name))
+                self.billing_table.setItem(row_idx, 2, _ro_item(f"{bill.academic_year} {bill.term_name}"))
+                self.billing_table.setItem(row_idx, 3, _ro_item(str(bill.student_count)))
+                self.billing_table.setItem(row_idx, 4, _ro_item(f"GHS {bill.fee_per_student:.2f}"))
+                self.billing_table.setItem(row_idx, 5, _ro_item(f"GHS {bill.total_amount:.2f}"))
+                
+                status_item = _status_item(bill.status, bill.status in ["Paid", "Approved"])
+                self.billing_table.setItem(row_idx, 6, status_item)
+                self.billing_table.setItem(row_idx, 7, _ro_item(bill.reference_no or "—"))
+                
+                if bill.status in ["Pending", "Paid"]:
+                    app_btn = QPushButton("Approve Payment")
+                    app_btn.setStyleSheet("background-color: #22c55e; color: white; border-radius: 4px; font-size: 11px; padding: 4px 8px;")
+                    app_btn.clicked.connect(lambda _, b_id=bill.id: self._approve_bill(b_id))
+                    self.billing_table.setCellWidget(row_idx, 8, app_btn)
+                else:
+                    self.billing_table.setItem(row_idx, 8, _ro_item("✓ Approved"))
+                self.billing_table.setRowHeight(row_idx, 36)
+        except Exception as e:
+            print(f"Error loading billing table: {e}")
+        finally:
+            session.close()
+
+    def _approve_bill(self, bill_id: int):
+        from database.master_connection import get_master_session
+        from database.master_models import PlatformBill
+        session = get_master_session()
+        try:
+            bill = session.query(PlatformBill).filter(PlatformBill.id == bill_id).first()
+            if bill:
+                bill.status = "Approved"
+                if not bill.paid_at:
+                    bill.paid_at = datetime.datetime.utcnow()
+                bill.approved_by = self.sysadmin.username
+                session.commit()
+                
+                # Auto record expense in branch DB
+                from server import sync_auto_platform_expense
+                sync_auto_platform_expense(bill.branch_id, bill)
+                
+                QMessageBox.information(self, "Success", f"✅ Platform bill of GHS {bill.total_amount:.2f} approved!\n\nAutomated Expense entry logged in branch database.")
+                self.load_billing_table()
+        except Exception as e:
+            session.rollback()
+            QMessageBox.critical(self, "Error", f"Failed to approve bill:\n{e}")
+        finally:
+            session.close()
 
     def _get_branches(self):
         from database.master_connection import get_master_session
@@ -700,7 +952,7 @@ class SystemAdminPortal(QMainWindow):
             # Seed the new branch DB
             QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
             from database.seed import seed_fresh_branch
-            success = seed_fresh_branch(db_path, data["name"])
+            success = seed_fresh_branch(db_path, data["name"], branch_info=data)
             QApplication.restoreOverrideCursor()
 
             if success:

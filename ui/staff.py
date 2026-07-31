@@ -604,10 +604,22 @@ class StaffDetailsDialog(QDialog):
         self.salary_input = QLineEdit()
         self.salary_input.setPlaceholderText("e.g. 2500.00")
         
+        self.sig_path_label = QLabel("No signature uploaded")
+        self.sig_path_label.setStyleSheet("color: #64748b; font-style: italic;")
+        self.upload_sig_btn = QPushButton("Upload Signature")
+        self.upload_sig_btn.setObjectName("secondary_btn")
+        self.upload_sig_btn.clicked.connect(self.upload_signature)
+        self.selected_sig_path = None
+        
+        sig_layout = QHBoxLayout()
+        sig_layout.addWidget(self.sig_path_label, stretch=3)
+        sig_layout.addWidget(self.upload_sig_btn, stretch=1)
+        
         emp_layout.addRow("Qualifications:", self.qualification_input)
         emp_layout.addRow("Hire Date:", self.hire_date_input)
         emp_layout.addRow("Residential Address:", self.address_input)
         emp_layout.addRow("Base Salary (GHS):", self.salary_input)
+        emp_layout.addRow("Signature Image:", sig_layout)
         
         tabs.addTab(emp_tab, "Employment")
         
@@ -640,6 +652,14 @@ class StaffDetailsDialog(QDialog):
         
         btn_layout.addWidget(btn_box)
         layout.addLayout(btn_layout)
+
+    def upload_signature(self):
+        file_path, _ = QFileDialog.getOpenFileName(
+            self, "Select Staff Signature", "", "Image Files (*.png *.jpg *.jpeg *.bmp)"
+        )
+        if file_path:
+            self.sig_path_label.setText(Path(file_path).name)
+            self.selected_sig_path = file_path
         
     def load_data(self):
         session = get_session()
@@ -650,15 +670,29 @@ class StaffDetailsDialog(QDialog):
                 self.lname_input.setText(staff.last_name)
                 self.onames_input.setText(staff.other_names or "")
                 self.email_input.setText(staff.email or "")
-                self.phone_input.setText(staff.phone)
-                self.role_input.setCurrentText(staff.role_title)
-                self.dept_input.setCurrentText(staff.department or "Academics")
-                self.status_input.setCurrentText(staff.status)
+                self.phone_input.setText(staff.phone or "")
                 
+                idx = self.role_input.findText(staff.role_title)
+                if idx >= 0:
+                    self.role_input.setCurrentIndex(idx)
+                    
+                idx_d = self.dept_input.findText(staff.department or "")
+                if idx_d >= 0:
+                    self.dept_input.setCurrentIndex(idx_d)
+                    
+                idx_s = self.status_input.findText(staff.status or "")
+                if idx_s >= 0:
+                    self.status_input.setCurrentIndex(idx_s)
+                    
                 self.qualification_input.setText(staff.qualification or "")
-                self.hire_date_input.setDate(QDate(staff.hire_date.year, staff.hire_date.month, staff.hire_date.day))
+                if staff.hire_date:
+                    self.hire_date_input.setDate(QDate(staff.hire_date.year, staff.hire_date.month, staff.hire_date.day))
                 self.address_input.setText(staff.address or "")
                 self.salary_input.setText(str(staff.base_salary or 0.0))
+
+                if getattr(staff, 'signature_path', None):
+                    self.sig_path_label.setText(Path(staff.signature_path).name)
+                    self.selected_sig_path = staff.signature_path
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to load staff details:\n{e}")
         finally:
@@ -700,6 +734,26 @@ class StaffDetailsDialog(QDialog):
                 staff.hire_date = datetime.date(hd.year(), hd.month(), hd.day())
                 staff.address = self.address_input.text().strip() or None
                 staff.base_salary = sal_val
+                
+                if self.selected_sig_path:
+                    from config import DATA_DIR
+                    import shutil, time
+                    from pathlib import Path
+                    src_path = self.selected_sig_path
+                    if not src_path.startswith(str(DATA_DIR)):
+                        ext = Path(src_path).suffix
+                        dest_path = DATA_DIR / f"staff_sig_{staff.id}_{int(time.time())}{ext}"
+                        try:
+                            shutil.copy2(src_path, dest_path)
+                            staff.signature_path = str(dest_path)
+                        except Exception as e:
+                            staff.signature_path = src_path
+                    else:
+                        staff.signature_path = src_path
+                        
+                    if "headteacher" in staff.role_title.lower() or "head" in staff.role_title.lower():
+                        from utils.branch_config import set_branch_setting
+                        set_branch_setting("headteacher_signature", staff.signature_path, session=session)
                 
                 session.commit()
                 QMessageBox.information(self, "Success", "Staff details updated successfully.")

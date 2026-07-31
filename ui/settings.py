@@ -73,10 +73,15 @@ class SettingsPanel(QWidget):
         form_layout.setSpacing(10)
         
         self.name_input = QLineEdit()
+        self.name_input.setReadOnly(True)
+        self.name_input.setToolTip("School Name is configured by System Administrator")
+        self.name_input.setStyleSheet("background-color: #1e293b; color: #94a3b8;")
+
         self.motto_input = QLineEdit()
         self.email_input = QLineEdit()
         self.phone_input = QLineEdit()
         self.address_input = QLineEdit()
+        self.gps_address_input = QLineEdit()
         
         self.logo_path_label = QLabel("No logo uploaded")
         self.logo_path_label.setStyleSheet("color: #64748b; font-style: italic;")
@@ -88,11 +93,12 @@ class SettingsPanel(QWidget):
         logo_layout.addWidget(self.logo_path_label, stretch=3)
         logo_layout.addWidget(self.upload_logo_btn, stretch=1)
         
-        form_layout.addRow("School Name:", self.name_input)
+        form_layout.addRow("School Name (Locked):", self.name_input)
         form_layout.addRow("School Motto / Slogan:", self.motto_input)
         form_layout.addRow("School Email Address:", self.email_input)
         form_layout.addRow("School Contact Phone:", self.phone_input)
         form_layout.addRow("School Physical Address:", self.address_input)
+        form_layout.addRow("School GPS Address:", self.gps_address_input)
         form_layout.addRow("School Logo Image:", logo_layout)
         
         tab_layout.addWidget(form_frame)
@@ -112,6 +118,7 @@ class SettingsPanel(QWidget):
         self.email_input.setText(get_branch_setting("school_email", ""))
         self.phone_input.setText(get_branch_setting("school_phone", ""))
         self.address_input.setText(get_branch_setting("school_address", ""))
+        self.gps_address_input.setText(get_branch_setting("gps_address", ""))
         
         logo_path = get_branch_setting("school_logo", "")
         if logo_path:
@@ -131,11 +138,11 @@ class SettingsPanel(QWidget):
         
     def save_branding(self):
         from utils.branch_config import set_branch_setting
-        set_branch_setting("school_name", self.name_input.text().strip())
         set_branch_setting("school_motto", self.motto_input.text().strip())
         set_branch_setting("school_email", self.email_input.text().strip())
         set_branch_setting("school_phone", self.phone_input.text().strip())
         set_branch_setting("school_address", self.address_input.text().strip())
+        set_branch_setting("gps_address", self.gps_address_input.text().strip())
         
         logo_path = ""
         if hasattr(self, 'selected_logo_path') and self.selected_logo_path:
@@ -155,7 +162,7 @@ class SettingsPanel(QWidget):
             else:
                 logo_path = src_path
                 
-        set_branch_setting("school_logo", logo_path)
+            set_branch_setting("school_logo", logo_path)
         QMessageBox.information(self, "Success", "School profile details updated successfully for this branch.")
 
     # --- Database Backups ---

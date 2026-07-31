@@ -22,6 +22,8 @@ class Branch(MasterBase):
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
     admins = relationship("BranchAdmin", back_populates="branch", cascade="all, delete-orphan")
+    platform_bills = relationship("PlatformBill", back_populates="branch", cascade="all, delete-orphan")
+    support_tickets = relationship("SupportTicket", back_populates="branch", cascade="all, delete-orphan")
 
     def __repr__(self):
         return f"<Branch id={self.id} name='{self.name}' code='{self.code}'>"
@@ -126,6 +128,57 @@ class GlobalPaymentGateway(MasterBase):
     merchant_id = Column(String(250), nullable=True)
     is_active = Column(Boolean, default=True)
     updated_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+
+class PlatformBill(MasterBase):
+    """Stores term-by-term platform software bill records per school branch managed by SystemAdmin."""
+    __tablename__ = "platform_bills"
+
+    id = Column(Integer, primary_key=True, index=True)
+    branch_id = Column(Integer, ForeignKey("branches.id", ondelete="CASCADE"), nullable=False)
+    academic_year = Column(String(50), nullable=False)  # e.g., "2025/2026"
+    term_name = Column(String(50), nullable=False)      # e.g., "Term 1"
+    student_count = Column(Integer, default=0)
+    fee_per_student = Column(Float, default=0.0)
+    total_amount = Column(Float, default=0.0)
+    status = Column(String(20), default="Pending")     # "Pending", "Paid", "Approved"
+    paid_at = Column(DateTime, nullable=True)
+    approved_by = Column(String(80), nullable=True)
+    reference_no = Column(String(100), nullable=True)
+    notes = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+    branch = relationship("Branch", back_populates="platform_bills")
+
+    def __repr__(self):
+        return f"<PlatformBill id={self.id} branch_id={self.branch_id} term='{self.academic_year} {self.term_name}' total={self.total_amount} status='{self.status}'>"
+
+
+class SupportTicket(MasterBase):
+    """Stores help/complaint support tickets sent by Branch Admins & Headteachers to System Admin."""
+    __tablename__ = "support_tickets"
+
+    id = Column(Integer, primary_key=True, index=True)
+    ticket_number = Column(String(50), unique=True, nullable=False)  # e.g., TCK-202607-001
+    branch_id = Column(Integer, ForeignKey("branches.id", ondelete="CASCADE"), nullable=False)
+    sender_username = Column(String(80), nullable=False)
+    sender_name = Column(String(120), nullable=False)
+    sender_role = Column(String(80), default="Branch Admin")
+    subject = Column(String(200), nullable=False)
+    category = Column(String(80), default="Technical Issue")  # "Technical Issue", "Billing / System Fee", "Feature Request", "Account / Access", "General"
+    priority = Column(String(20), default="Medium")           # "Low", "Medium", "High", "Critical"
+    description = Column(Text, nullable=False)
+    status = Column(String(20), default="Open")              # "Open", "In Progress", "Resolved", "Closed"
+    admin_response = Column(Text, nullable=True)              # Feedback provided by System Admin when resolving
+    resolved_by = Column(String(80), nullable=True)
+    resolved_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+
+    branch = relationship("Branch", back_populates="support_tickets")
+
+    def __repr__(self):
+        return f"<SupportTicket {self.ticket_number} status='{self.status}' subject='{self.subject}'>"
 
 
 

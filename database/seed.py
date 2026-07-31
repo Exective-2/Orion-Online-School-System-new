@@ -690,7 +690,7 @@ def seed_database(seed_demo: bool = True):
     session.close()
     print("Database seeding completed successfully.")
 
-def seed_fresh_branch(branch_db_path, branch_name: str = "New Branch") -> bool:
+def seed_fresh_branch(branch_db_path, branch_name: str = "New Branch", branch_info: dict = None) -> bool:
     """
     Minimal seed for a brand-new branch database.
 
@@ -825,7 +825,27 @@ def seed_fresh_branch(branch_db_path, branch_name: str = "New Branch") -> bool:
             session.add(Subject(name=s_name, code=s_code, class_level=s_level))
         session.flush()
 
-        # 6. Audit log
+        # 6. Branch system settings
+        from database.models import SystemSetting
+        info = branch_info or {}
+        default_settings = {
+            "school_name": info.get("name", branch_name),
+            "school_motto": info.get("motto", ""),
+            "school_address": info.get("address", ""),
+            "gps_address": info.get("gps_address", ""),
+            "school_phone": info.get("phone", ""),
+            "school_email": info.get("email", ""),
+            "school_logo": info.get("logo", ""),
+            "headteacher_signature": "",
+            "curriculum": "GES",
+            "currency": "GHS",
+            "theme": "dark"
+        }
+        for k, v in default_settings.items():
+            session.add(SystemSetting(key=k, value=str(v) if v is not None else ""))
+        session.flush()
+
+        # 7. Audit log
         session.add(AuditLog(
             user_id=None,
             action="Branch Initialize",
