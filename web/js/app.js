@@ -195,24 +195,35 @@ function triggerAppSplash(onComplete) {
     if (splashUser) splashUser.innerText = `Welcome back, ${userName}!`;
     if (progressFill) progressFill.style.width = "0%";
 
+    // Reset logo/icon visibility
+    if (splashLogo) splashLogo.style.display = "none";
+    if (splashIcon) splashIcon.style.display = "inline-block";
+
     // Switch view to splash screen
     showView("view-splash");
 
-    // Fetch branding logo if available
+    // Fetch branding logo & school profile info
     apiFetch("/api/settings/school-profile")
         .then(profile => {
-            if (profile && profile.school_logo && splashLogo) {
-                const logoUrl = profile.school_logo.startsWith("/") ? profile.school_logo : "/" + profile.school_logo;
-                splashLogo.src = `${logoUrl}?v=${Date.now()}`;
-                splashLogo.style.display = "inline-block";
-                if (splashIcon) splashIcon.style.display = "none";
+            if (profile) {
+                if (profile.school_name && splashTitle) {
+                    splashTitle.innerText = profile.school_name.toUpperCase();
+                }
+                if (profile.school_logo && splashLogo) {
+                    const logoUrl = profile.school_logo.startsWith("/") ? profile.school_logo : "/" + profile.school_logo;
+                    splashLogo.src = `${logoUrl}?v=${Date.now()}`;
+                    splashLogo.onload = () => {
+                        splashLogo.style.display = "inline-block";
+                        if (splashIcon) splashIcon.style.display = "none";
+                    };
+                }
             }
         })
         .catch(() => {});
 
     let progress = 0;
     const interval = setInterval(() => {
-        progress += 10;
+        progress += 5;
         if (progressFill) progressFill.style.width = progress + "%";
 
         if (statusText) {
@@ -238,9 +249,9 @@ function triggerAppSplash(onComplete) {
                         parseTokenAndRoute();
                     }
                 }, 300);
-            }, 250);
+            }, 200);
         }
-    }, 110);
+    }, 90);
 }
 
 function parseTokenAndRoute() {
