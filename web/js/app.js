@@ -277,6 +277,9 @@ function parseTokenAndRoute() {
             switchPanel("panel-dashboard");
             updateHeaderAcademicBadge();
         }
+
+        // Always load school branch name and logo for every portal user
+        loadAppBranding();
     } catch (err) {
         console.error("Error setting up UI layout for user:", err);
     }
@@ -5622,13 +5625,18 @@ function updateHeaderBranding(schoolName, logoUrl) {
     const brandText = document.getElementById("header-brand-text");
     const brandIcon = document.getElementById("header-brand-icon");
     const brandLogo = document.getElementById("header-school-logo");
+    const branchBadge = document.getElementById("header-branch-badge");
     
     if (brandText && schoolName) {
         brandText.innerText = schoolName.toUpperCase();
     }
+    if (branchBadge && schoolName && currentUser && currentUser.role !== "System Admin") {
+        branchBadge.innerHTML = `<i class="fa-solid fa-school"></i> ${schoolName}`;
+    }
     if (brandLogo) {
         if (logoUrl) {
-            brandLogo.src = `${logoUrl}?v=${Date.now()}`;
+            const formattedLogoUrl = logoUrl.startsWith("/") ? logoUrl : "/" + logoUrl;
+            brandLogo.src = `${formattedLogoUrl}?v=${Date.now()}`;
             brandLogo.style.display = "inline-block";
             if (brandIcon) brandIcon.style.display = "none";
         } else {
@@ -5636,6 +5644,17 @@ function updateHeaderBranding(schoolName, logoUrl) {
             if (brandIcon) brandIcon.style.display = "inline-block";
         }
     }
+}
+
+function loadAppBranding() {
+    apiFetch("/api/settings/school-profile")
+        .then(profile => {
+            if (profile) {
+                const logoUrl = profile.school_logo || "";
+                updateHeaderBranding(profile.school_name || currentBranchName, logoUrl);
+            }
+        })
+        .catch(err => console.warn("Failed to load school branding:", err));
 }
 
 document.getElementById("form-settings-profile")?.addEventListener("submit", async (e) => {
@@ -5786,6 +5805,9 @@ function setSysadminActiveBranch(branchId, branchName) {
     if (sysSel) sysSel.value = branchId ? branchId.toString() : "";
     const headSel = document.getElementById("header-branch-switcher");
     if (headSel) headSel.value = branchId ? branchId.toString() : "";
+    
+    // Reload branding for the switched branch context
+    loadAppBranding();
 }
 
 // Add change listeners for branch switchers
