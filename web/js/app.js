@@ -8343,6 +8343,21 @@ function openUserProfileModal() {
             if (uEmail) uEmail.value = data.email || "";
             if (uPhone) uPhone.value = data.phone || "";
 
+            // Signature preview
+            const sigPreview = document.getElementById("user-profile-sig-preview");
+            const sigPlaceholder = document.getElementById("user-profile-sig-placeholder");
+            const sigInput = document.getElementById("user-profile-sig-file");
+            if (sigInput) sigInput.value = "";
+
+            if (data.signature_url && sigPreview && sigPlaceholder) {
+                sigPreview.src = `${data.signature_url}?v=${Date.now()}`;
+                sigPreview.style.display = "inline-block";
+                sigPlaceholder.style.display = "none";
+            } else if (sigPreview && sigPlaceholder) {
+                sigPreview.style.display = "none";
+                sigPlaceholder.style.display = "inline-block";
+            }
+
             // Clear password fields
             const pCurr = document.getElementById("user-pass-current");
             const pNew = document.getElementById("user-pass-new");
@@ -8355,6 +8370,26 @@ function openUserProfileModal() {
         })
         .catch(err => showToast(err.message, "error"));
 }
+
+document.getElementById("user-profile-sig-file")?.addEventListener("change", (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const formData = new FormData();
+    formData.append("file", file);
+
+    apiFetch("/api/user/upload-signature", { method: "POST", body: formData })
+        .then(res => {
+            showToast("Signature image uploaded and saved successfully!", "success");
+            const sigPreview = document.getElementById("user-profile-sig-preview");
+            const sigPlaceholder = document.getElementById("user-profile-sig-placeholder");
+            if (sigPreview && sigPlaceholder) {
+                sigPreview.src = res.signature_url;
+                sigPreview.style.display = "inline-block";
+                sigPlaceholder.style.display = "none";
+            }
+        })
+        .catch(err => showToast(err.message || "Failed to upload signature", "error"));
+});
 
 document.getElementById("form-user-personal-info")?.addEventListener("submit", (e) => {
     e.preventDefault();

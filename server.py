@@ -5005,6 +5005,16 @@ def get_user_profile(user=Depends(get_current_user)):
             full_name = f"{first_name} {last_name}".strip() or usr.username
             role_name = usr.role.name if usr.role else (user.get("role") or "User")
             
+            sig_url = ""
+            if staff and staff.signature_path:
+                sig_url = f"/{staff.signature_path}" if not staff.signature_path.startswith("/") else staff.signature_path
+            else:
+                ht_sig = get_branch_setting("headteacher_signature", "")
+                if ht_sig:
+                    sig_url = f"/{ht_sig}" if not ht_sig.startswith("/") else ht_sig
+
+            is_headteacher = "head" in role_name.lower() or "admin" in role_name.lower() or (staff and "head" in (staff.role_title or "").lower())
+            
             return {
                 "user_id": usr.id,
                 "username": usr.username,
@@ -5014,7 +5024,9 @@ def get_user_profile(user=Depends(get_current_user)):
                 "email": email or "",
                 "phone": phone or "",
                 "role": role_name,
-                "is_sysadmin": False
+                "is_sysadmin": False,
+                "is_headteacher": is_headteacher,
+                "signature_url": sig_url
             }
         finally:
             session.close()
@@ -5068,6 +5080,43 @@ def update_user_profile(data: dict, user=Depends(get_current_user)):
             return {"status": "success", "message": "Profile updated successfully", "full_name": full_name}
         finally:
             session.close()
+
+@app.post("/api/user/upload-signature")
+async def upload_current_user_signature(request: Request, file: UploadFile = File(...), user=Depends(get_current_user)):
+    import shutil
+    user_id = user.get("user_id") or user.get("id")
+    branch_id = resolve_current_branch_id(user, request)
+    
+    uploads_dir = UPLOADS_DIR / f"branch_{branch_id}" / "signatures"
+    uploads_dir.mkdir(parents=True, exist_ok=True)
+    ext = os.path.splitext(file.filename)[1].lower() or ".png"
+    filename = f"user_sig_{user_id}_{int(time.time())}{ext}"
+    filepath = uploads_dir / filename
+    
+    with open(filepath, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+        
+    rel_path = f"uploads/branch_{branch_id}/signatures/{filename}"
+    
+    session = get_session()
+    try:
+        usr = session.query(User).filter(User.id == user_id).first()
+        role_name = (usr.role.name if usr and usr.role else user.get("role") or "").lower()
+        
+        if usr and usr.staff_profile:
+            usr.staff_profile.signature_path = rel_path
+            
+        if "head" in role_name or "admin" in role_name or "principal" in role_name:
+            set_branch_setting("headteacher_signature", rel_path, session=session)
+            
+        session.commit()
+        log_audit(user, "Upload User Signature", f"Uploaded signature image for user {user.get('username')}")
+        return {"status": "success", "signature_url": f"/{rel_path}?v={int(time.time())}"}
+    except Exception as e:
+        session.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        session.close()
 
 @app.post("/api/user/change-password")
 def change_user_password(data: dict, user=Depends(get_current_user)):

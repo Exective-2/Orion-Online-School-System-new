@@ -4925,6 +4925,19 @@
                                     <label>Phone Number</label>
                                     <input type="text" id="user-profile-phone" class="form-control" placeholder="e.g. +233241234567">
                                 </div>
+                                <div class="form-group full-width" id="user-profile-signature-group" style="grid-column: span 2; margin-top: 10px; padding-top: 14px; border-top: 1px solid var(--border-glass);">
+                                    <label><i class="fa-solid fa-file-signature" style="color: var(--accent-primary);"></i> Headteacher / Authorization Signature</label>
+                                    <div style="display: flex; align-items: center; gap: 15px; margin-top: 6px;">
+                                        <div id="user-profile-sig-preview-box" style="width: 150px; height: 50px; border-radius: 8px; border: 1px dashed var(--border-glass); background: rgba(255,255,255,0.04); display: flex; align-items: center; justify-content: center; overflow: hidden; position: relative;">
+                                            <img id="user-profile-sig-preview" src="" style="max-width: 100%; max-height: 100%; object-fit: contain; display: none;" onerror="this.style.display='none'; document.getElementById('user-profile-sig-placeholder').style.display='inline-block';">
+                                            <span id="user-profile-sig-placeholder" style="font-size: 11px; color: var(--text-muted);">No signature</span>
+                                        </div>
+                                        <div style="flex: 1;">
+                                            <input type="file" id="user-profile-sig-file" class="form-control" accept="image/png, image/jpeg, image/webp" style="font-size: 12px; padding: 6px 10px;">
+                                            <small style="font-size: 11px; color: var(--text-muted); display: block; margin-top: 4px;">Upload transparent PNG signature image (rendered on approved report cards & certificates).</small>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                             <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 15px;">
                                 <button type="button" class="btn btn-secondary btn-modal-cancel">Close</button>
@@ -5244,6 +5257,6 @@
     </div>
 
     <!-- Script Entry -->
-    <script src="/js/app.js?v=20260731_1348"></script>
+    <script src="/js/app.js?v=20260731_1413"></script>
 </body>
 </html>
