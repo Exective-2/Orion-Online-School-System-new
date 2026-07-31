@@ -3151,8 +3151,16 @@
                                         </thead>
                                         <tbody>
                                             <tr><td colspan="6">Loading active broadcasts...</td></tr>
-                                                                        <!-- Tab 7: Platform Billing -->
+                                        </tbody>
+                                    </table>
+                                </div>
+
+                                <!-- Tab 7: Platform Billing -->
                                 <div class="tab-content" id="tab-sys-billing">
+                                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+                                        <h3 style="margin:0;"><i class="fa-solid fa-file-invoice-dollar" style="color: #3b82f6;"></i> Multi-School Platform Billing Statements</h3>
+                                        <button class="btn btn-secondary btn-sm" onclick="loadSysadminBilling()"><i class="fa-solid fa-arrows-rotate"></i> Refresh Billing</button>
+                                    </div>
                                     <table class="table" id="sys-billing-table">
                                         <thead>
                                             <tr>
@@ -3170,8 +3178,6 @@
                                         <tbody>
                                             <tr><td colspan="9">Loading platform billing statements...</td></tr>
                                         </tbody>
-                                    </table>
-                                </div>   </tbody>
                                     </table>
                                 </div>
                                 
@@ -5291,6 +5297,6 @@
     </div>
 
     <!-- Script Entry -->
-    <script src="/js/app.js?v=20260731_0832"></script>
+    <script src="/js/app.js?v=20260731_0916"></script>
 </body>
 </html>
