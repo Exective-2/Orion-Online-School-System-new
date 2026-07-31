@@ -29,7 +29,7 @@ def draw_pdf_watermark_and_footer(canvas, doc):
     canvas.saveState()
     try:
         # 1. Logo Watermark (90% fade = 10% opacity)
-        logo_path = get_branch_setting("school_logo", "")
+        logo_path = get_branch_setting("school_logo", "") or ""
         if logo_path:
             if not os.path.isabs(logo_path):
                 clean_logo = logo_path.lstrip("/")
@@ -52,7 +52,7 @@ def draw_pdf_watermark_and_footer(canvas, doc):
                     pass
 
         # 2. Footer (School Motto at bottom center, font size 8px, 50% fade)
-        school_motto = get_branch_setting("school_motto", "")
+        school_motto = get_branch_setting("school_motto", "") or ""
         if school_motto:
             canvas.setFont("Helvetica-Oblique", 8)
             canvas.setFillColor(colors.HexColor("#64748b"))
@@ -67,7 +67,7 @@ def draw_pdf_watermark_and_footer(canvas, doc):
 def add_pdf_header(story, title_text=None):
     from reportlab.platypus import Image
     
-    logo_path = get_branch_setting("school_logo", "")
+    logo_path = get_branch_setting("school_logo", "") or ""
     if logo_path:
         if os.path.isabs(logo_path):
             logo_file = logo_path
@@ -80,12 +80,12 @@ def add_pdf_header(story, title_text=None):
         logo_file = ""
     logo_exists = bool(logo_file and os.path.exists(logo_file))
     
-    school_name = get_branch_setting("school_name", "Orion School System")
-    school_motto = get_branch_setting("school_motto", "")
-    school_phone = get_branch_setting("school_phone", "")
-    school_email = get_branch_setting("school_email", "")
-    school_address = get_branch_setting("school_address", "")
-    gps_address = get_branch_setting("gps_address", "")
+    school_name = get_branch_setting("school_name", "Orion School System") or "Orion School System"
+    school_motto = get_branch_setting("school_motto", "") or ""
+    school_phone = get_branch_setting("school_phone", "") or ""
+    school_email = get_branch_setting("school_email", "") or ""
+    school_address = get_branch_setting("school_address", "") or ""
+    gps_address = get_branch_setting("gps_address", "") or ""
     
     # Styles
     name_style = ParagraphStyle(
@@ -1385,7 +1385,7 @@ def generate_payslip_pdf(payslip, output_path: str = None):
         
         # Signatures
         story.append(Spacer(1, 20))
-        sig_path = get_branch_setting("headteacher_signature", "")
+        sig_path = get_branch_setting("headteacher_signature", "") or ""
         sig_file = ""
         if sig_path:
             if os.path.isabs(sig_path):
