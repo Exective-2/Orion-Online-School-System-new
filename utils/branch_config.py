@@ -5,7 +5,8 @@ from config import config
 
 BRANCH_PROFILE_KEYS = {
     "school_name", "school_motto", "school_tagline", "school_email", 
-    "school_phone", "school_address", "gps_address", "school_logo", "headteacher_signature", 
+    "school_phone", "school_address", "gps_address", "school_logo", "school_logo_base64", 
+    "headteacher_signature", "headteacher_signature_base64", 
     "curriculum", "currency", "theme"
 }
 

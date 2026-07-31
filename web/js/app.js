@@ -216,8 +216,9 @@ function triggerAppSplash(onComplete) {
                     splashTitle.innerText = profile.school_name.toUpperCase();
                 }
                 if (profile.school_logo && splashLogo) {
-                    const logoUrl = profile.school_logo.startsWith("/") ? profile.school_logo : "/" + profile.school_logo;
-                    splashLogo.src = `${logoUrl}?v=${Date.now()}`;
+                    const isDataUri = profile.school_logo.startsWith("data:");
+                    const logoUrl = isDataUri || profile.school_logo.startsWith("/") ? profile.school_logo : "/" + profile.school_logo;
+                    splashLogo.src = isDataUri ? logoUrl : `${logoUrl}?v=${Date.now()}`;
                     splashLogo.onload = () => {
                         splashLogo.style.display = "inline-block";
                         if (splashIcon) splashIcon.style.display = "none";
@@ -5536,10 +5537,11 @@ function loadSettings() {
              document.getElementById("set-school-address").value = profile.school_address || "";
 
              if (profile.school_logo) {
-                 const logoUrl = profile.school_logo.startsWith("/") ? profile.school_logo : "/" + profile.school_logo;
+                 const isData = profile.school_logo.startsWith("data:");
+                 const logoUrl = isData || profile.school_logo.startsWith("/") ? profile.school_logo : "/" + profile.school_logo;
                  const previewImg = document.getElementById("set-logo-preview");
                  if (previewImg) {
-                     previewImg.src = `${logoUrl}?v=${Date.now()}`;
+                     previewImg.src = isData ? logoUrl : `${logoUrl}?v=${Date.now()}`;
                      previewImg.style.display = "inline-block";
                      previewImg.style.opacity = "1";
                  }
@@ -5553,10 +5555,11 @@ function loadSettings() {
                  updateHeaderBranding(profile.school_name, "");
              }
              if (profile.headteacher_signature) {
-                 const sigUrl = profile.headteacher_signature.startsWith("/") ? profile.headteacher_signature : "/" + profile.headteacher_signature;
+                 const isSigData = profile.headteacher_signature.startsWith("data:");
+                 const sigUrl = isSigData || profile.headteacher_signature.startsWith("/") ? profile.headteacher_signature : "/" + profile.headteacher_signature;
                  const sigImg = document.getElementById("set-signature-preview");
                  if (sigImg) {
-                     sigImg.src = `${sigUrl}?v=${Date.now()}`;
+                     sigImg.src = isSigData ? sigUrl : `${sigUrl}?v=${Date.now()}`;
                      sigImg.style.display = "inline-block";
                      sigImg.style.opacity = "1";
                  }
@@ -5739,8 +5742,9 @@ function updateHeaderBranding(schoolName, logoUrl) {
     }
     if (brandLogo) {
         if (logoUrl) {
-            const formattedLogoUrl = logoUrl.startsWith("/") ? logoUrl : "/" + logoUrl;
-            brandLogo.src = `${formattedLogoUrl}?v=${Date.now()}`;
+            const isData = logoUrl.startsWith("data:");
+            const formattedLogoUrl = isData || logoUrl.startsWith("/") ? logoUrl : "/" + logoUrl;
+            brandLogo.src = isData ? formattedLogoUrl : `${formattedLogoUrl}?v=${Date.now()}`;
             brandLogo.style.display = "inline-block";
             if (brandIcon) brandIcon.style.display = "none";
         } else {

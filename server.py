@@ -5167,22 +5167,77 @@ def change_user_password(data: dict, user=Depends(get_current_user)):
             session.close()
 
 # --- Settings & Profile API ---
+def save_uploaded_image_with_b64(file_bytes: bytes, filename: str, setting_key: str, branch_id: int, content_type: str = "image/png"):
+    import base64
+    uploads_dir = UPLOADS_DIR / f"branch_{branch_id}"
+    uploads_dir.mkdir(parents=True, exist_ok=True)
+    filepath = uploads_dir / filename
+    rel_path = f"uploads/branch_{branch_id}/{filename}"
+    
+    try:
+        with open(filepath, "wb") as f:
+            f.write(file_bytes)
+    except Exception as ex:
+        print(f"Notice: Disk write exception (non-fatal on Vercel): {ex}")
+
+    mime = content_type or "image/png"
+    b64_str = base64.b64encode(file_bytes).decode("utf-8")
+    data_uri = f"data:{mime};base64,{b64_str}"
+    
+    b_filename = get_branch_db_filename(branch_id)
+    if b_filename:
+        b_url = get_branch_db_url(branch_id, b_filename)
+        tok = current_db_url.set(b_url)
+        try:
+            set_branch_setting(setting_key, rel_path)
+            set_branch_setting(f"{setting_key}_base64", data_uri)
+        finally:
+            current_db_url.reset(tok)
+    else:
+        set_branch_setting(setting_key, rel_path)
+        set_branch_setting(f"{setting_key}_base64", data_uri)
+        
+    return rel_path, data_uri
+
 @app.get("/api/settings/school-profile")
-def get_school_profile(user=Depends(get_current_user)):
-    return {
-        "school_name": get_branch_setting("school_name", ""),
-        "school_motto": get_branch_setting("school_motto", ""),
-        "school_tagline": get_branch_setting("school_tagline", "ORION"),
-        "school_email": get_branch_setting("school_email", ""),
-        "school_phone": get_branch_setting("school_phone", ""),
-        "school_address": get_branch_setting("school_address", ""),
-        "gps_address": get_branch_setting("gps_address", ""),
-        "school_logo": get_branch_setting("school_logo", ""),
-        "headteacher_signature": get_branch_setting("headteacher_signature", ""),
-        "curriculum": get_branch_setting("curriculum", "GES"),
-        "currency": get_branch_setting("currency", "GHS"),
-        "theme": get_branch_setting("theme", "dark")
-    }
+def get_school_profile(request: Request, user=Depends(get_current_user)):
+    branch_id = resolve_current_branch_id(user, request)
+    b_filename = get_branch_db_filename(branch_id)
+    
+    def _fetch_profile():
+        logo_path = get_branch_setting("school_logo", "")
+        logo_b64 = get_branch_setting("school_logo_base64", "")
+        sig_path = get_branch_setting("headteacher_signature", "")
+        sig_b64 = get_branch_setting("headteacher_signature_base64", "")
+
+        # Fallback to base64 data URI for 100% serverless Vercel persistence
+        final_logo = logo_b64 if logo_b64 else logo_path
+        final_sig = sig_b64 if sig_b64 else sig_path
+
+        return {
+            "school_name": get_branch_setting("school_name", ""),
+            "school_motto": get_branch_setting("school_motto", ""),
+            "school_tagline": get_branch_setting("school_tagline", "ORION"),
+            "school_email": get_branch_setting("school_email", ""),
+            "school_phone": get_branch_setting("school_phone", ""),
+            "school_address": get_branch_setting("school_address", ""),
+            "gps_address": get_branch_setting("gps_address", ""),
+            "school_logo": final_logo,
+            "headteacher_signature": final_sig,
+            "curriculum": get_branch_setting("curriculum", "GES"),
+            "currency": get_branch_setting("currency", "GHS"),
+            "theme": get_branch_setting("theme", "dark")
+        }
+
+    if b_filename:
+        b_url = get_branch_db_url(branch_id, b_filename)
+        tok = current_db_url.set(b_url)
+        try:
+            return _fetch_profile()
+        finally:
+            current_db_url.reset(tok)
+    else:
+        return _fetch_profile()
 
 @app.put("/api/settings/school-profile")
 def update_school_profile(data: dict, user=Depends(get_current_user)):
@@ -5204,11 +5259,12 @@ def update_school_profile(data: dict, user=Depends(get_current_user)):
                 if "school_address" in data:
                     b_rec.address = data["school_address"]
                 m_session.commit()
+        except Exception:
+            pass
+        finally:
             m_session.close()
-        except Exception as ex:
-            print(f"Error syncing branch profile to master: {ex}")
 
-    log_audit(user, "Update School Profile", "Updated general settings profile")
+    log_audit(user, "Update School Profile", "Updated school branding and profile details")
     return {"status": "success"}
 
 def resolve_current_branch_id(user: dict, request: Optional[Request] = None) -> int:
@@ -5237,65 +5293,31 @@ def resolve_current_branch_id(user: dict, request: Optional[Request] = None) -> 
 
 @app.post("/api/settings/upload-logo")
 async def upload_school_logo(request: Request, file: UploadFile = File(...), user=Depends(get_current_user)):
-    import shutil
     try:
         branch_id = resolve_current_branch_id(user, request)
-        uploads_dir = UPLOADS_DIR / f"branch_{branch_id}"
-        uploads_dir.mkdir(parents=True, exist_ok=True)
         ext = os.path.splitext(file.filename)[1].lower() or ".png"
         filename = f"school_logo_{int(time.time())}{ext}"
-        filepath = uploads_dir / filename
+        content = await file.read()
         
-        with open(filepath, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
-            
-        rel_path = f"uploads/branch_{branch_id}/{filename}"
-        
-        b_filename = get_branch_db_filename(branch_id)
-        if b_filename:
-            b_url = get_branch_db_url(branch_id, b_filename)
-            tok = current_db_url.set(b_url)
-            try:
-                set_branch_setting("school_logo", rel_path)
-            finally:
-                current_db_url.reset(tok)
-        else:
-            set_branch_setting("school_logo", rel_path)
+        rel_path, data_uri = save_uploaded_image_with_b64(content, filename, "school_logo", branch_id, file.content_type)
         
         log_audit(user, "Upload School Logo", f"Updated school logo image for branch {branch_id}")
-        return {"status": "success", "logo_url": f"/{rel_path}?v={int(time.time())}"}
+        return {"status": "success", "logo_url": f"/{rel_path}?v={int(time.time())}", "logo_base64": data_uri}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/settings/upload-signature")
 async def upload_headteacher_signature(request: Request, file: UploadFile = File(...), user=Depends(get_current_user)):
-    import shutil
     try:
         branch_id = resolve_current_branch_id(user, request)
-        uploads_dir = UPLOADS_DIR / f"branch_{branch_id}"
-        uploads_dir.mkdir(parents=True, exist_ok=True)
         ext = os.path.splitext(file.filename)[1].lower() or ".png"
         filename = f"headteacher_signature_{int(time.time())}{ext}"
-        filepath = uploads_dir / filename
+        content = await file.read()
         
-        with open(filepath, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
-            
-        rel_path = f"uploads/branch_{branch_id}/{filename}"
-        
-        b_filename = get_branch_db_filename(branch_id)
-        if b_filename:
-            b_url = get_branch_db_url(branch_id, b_filename)
-            tok = current_db_url.set(b_url)
-            try:
-                set_branch_setting("headteacher_signature", rel_path)
-            finally:
-                current_db_url.reset(tok)
-        else:
-            set_branch_setting("headteacher_signature", rel_path)
+        rel_path, data_uri = save_uploaded_image_with_b64(content, filename, "headteacher_signature", branch_id, file.content_type)
         
         log_audit(user, "Upload Headteacher Signature", f"Updated headteacher signature image for branch {branch_id}")
-        return {"status": "success", "signature_url": f"/{rel_path}?v={int(time.time())}"}
+        return {"status": "success", "signature_url": f"/{rel_path}?v={int(time.time())}", "signature_base64": data_uri}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -7446,6 +7468,9 @@ web_dir = APP_DIR / "web"
 @app.get("/uploads/{file_path:path}")
 @app.get("/api/uploads/{file_path:path}")
 def serve_uploads(file_path: str):
+    import base64
+    from fastapi.responses import Response
+    
     candidates = [
         UPLOADS_DIR / file_path,
         DATA_DIR / "uploads" / file_path,
@@ -7456,6 +7481,44 @@ def serve_uploads(file_path: str):
         if cand.exists() and cand.is_file():
             return FileResponse(str(cand))
             
+    # Serverless Vercel fallback: Return Base64 decoded image from Database
+    branch_id = 1
+    if "branch_" in file_path:
+        try:
+            parts = file_path.split("branch_")[1].split("/")
+            branch_id = int(parts[0])
+        except Exception:
+            branch_id = 1
+
+    b_filename = get_branch_db_filename(branch_id)
+    
+    def _get_b64():
+        if "logo" in file_path:
+            return get_branch_setting("school_logo_base64", "")
+        elif "sig" in file_path or "signature" in file_path:
+            return get_branch_setting("headteacher_signature_base64", "")
+        return ""
+
+    b64_data = ""
+    if b_filename:
+        b_url = get_branch_db_url(branch_id, b_filename)
+        tok = current_db_url.set(b_url)
+        try:
+            b64_data = _get_b64()
+        finally:
+            current_db_url.reset(tok)
+    else:
+        b64_data = _get_b64()
+
+    if b64_data and "base64," in b64_data:
+        try:
+            header, encoded = b64_data.split("base64,", 1)
+            mime_type = header.replace("data:", "").replace(";", "") or "image/png"
+            img_bytes = base64.b64decode(encoded)
+            return Response(content=img_bytes, media_type=mime_type)
+        except Exception as ex:
+            print(f"Base64 image serve exception for {file_path}: {ex}")
+
     raise HTTPException(status_code=404, detail="File not found")
 
 @app.get("/")
