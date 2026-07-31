@@ -242,14 +242,14 @@ function triggerAppSplash(onComplete) {
 
     let progress = 0;
     const interval = setInterval(() => {
-        progress += 5;
+        progress += 10;
         if (progressFill) progressFill.style.width = progress + "%";
 
         if (statusText) {
             if (progress < 35) {
                 statusText.innerHTML = `<i class="fa-solid fa-shield-halved fa-beat"></i> Authenticating user session...`;
             } else if (progress < 75) {
-                statusText.innerHTML = `<i class="fa-solid fa-building-user fa-spin"></i> Loading branch workspace & permissions...`;
+                statusText.innerHTML = `<i class="fa-solid fa-building-user fa-spin"></i> Loading branch workspace...`;
             } else {
                 statusText.innerHTML = `<i class="fa-solid fa-circle-check"></i> Preparing dashboard analytics...`;
             }
@@ -274,10 +274,10 @@ function triggerAppSplash(onComplete) {
                     } else {
                         parseTokenAndRoute();
                     }
-                }, 300);
-            }, 200);
+                }, 100);
+            }, 60);
         }
-    }, 90);
+    }, 20);
 }
 
 function parseTokenAndRoute() {
