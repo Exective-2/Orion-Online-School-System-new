@@ -10,6 +10,10 @@ let enrollmentChart = null;
 let attendanceChart = null;
 let billingChart = null;
 
+// PWA + SSE globals
+let _orionSSE = null;          // OrionSSE instance
+let _deferredInstallPrompt = null; // PWA install prompt
+
 // --- 1. Startup & Initialization ---
 document.addEventListener("DOMContentLoaded", () => {
     // Restore sidebar state
@@ -387,6 +391,11 @@ function parseTokenAndRoute() {
 
         // Always load school branch name and logo for every portal user
         loadAppBranding();
+
+        // Start real-time notification stream (SSE) for staff/admin roles
+        setTimeout(() => {
+            if (typeof startOrionSSE === "function") startOrionSSE();
+        }, 500);
     } catch (err) {
         console.error("Error setting up UI layout for user:", err);
     }
@@ -8900,3 +8909,353 @@ document.getElementById("form-sys-resolve-ticket")?.addEventListener("submit", f
     });
 });
 
+
+// ══════════════════════════════════════════════════════════════════
+//  PWA: Service Worker Registration
+// ══════════════════════════════════════════════════════════════════
+
+(function initPWA() {
+    // Register Service Worker
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('/sw.js', { scope: '/' })
+                .then(reg => {
+                    console.log('[PWA] Service Worker registered. Scope:', reg.scope);
+
+                    // Listen for SW updates and prompt user to refresh
+                    reg.addEventListener('updatefound', () => {
+                        const newWorker = reg.installing;
+                        if (newWorker) {
+                            newWorker.addEventListener('statechange', () => {
+                                if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                                    showToast('App update available — refresh to apply', 'info');
+                                }
+                            });
+                        }
+                    });
+                })
+                .catch(err => console.warn('[PWA] Service Worker registration failed:', err));
+
+            // Listen for messages from SW (e.g., sync complete)
+            navigator.serviceWorker.addEventListener('message', event => {
+                if (event.data?.type === 'SYNC_COMPLETE') {
+                    const count = event.data.count || 0;
+                    showToast(`${count} offline action${count !== 1 ? 's' : ''} synced successfully`, 'success');
+                }
+            });
+        });
+    }
+
+    // Offline/online indicator
+    const offlineBar = document.getElementById('offline-indicator');
+
+    function updateOnlineStatus() {
+        if (!offlineBar) return;
+        if (!navigator.onLine) {
+            offlineBar.classList.add('visible');
+            // Trigger manual sync when back online
+        } else {
+            offlineBar.classList.remove('visible');
+            // Ask SW to drain the queue now that we're online
+            if (navigator.serviceWorker.controller) {
+                navigator.serviceWorker.controller.postMessage({ type: 'MANUAL_SYNC' });
+            }
+        }
+    }
+
+    window.addEventListener('online', updateOnlineStatus);
+    window.addEventListener('offline', updateOnlineStatus);
+    updateOnlineStatus(); // Check on page load
+
+    // PWA Install Prompt
+    window.addEventListener('beforeinstallprompt', e => {
+        e.preventDefault();
+        _deferredInstallPrompt = e;
+        showPwaBanner();
+    });
+
+    window.addEventListener('appinstalled', () => {
+        _deferredInstallPrompt = null;
+        hidePwaBanner();
+        showToast('Orion SMS installed successfully!', 'success');
+    });
+
+    // Wire install banner buttons
+    const btnInstall = document.getElementById('btn-pwa-install');
+    const btnDismiss = document.getElementById('btn-pwa-dismiss');
+
+    if (btnInstall) {
+        btnInstall.addEventListener('click', () => {
+            if (!_deferredInstallPrompt) return;
+            _deferredInstallPrompt.prompt();
+            _deferredInstallPrompt.userChoice.then(choice => {
+                if (choice.outcome === 'accepted') {
+                    showToast('Installing Orion SMS...', 'success');
+                }
+                _deferredInstallPrompt = null;
+                hidePwaBanner();
+            });
+        });
+    }
+
+    if (btnDismiss) {
+        btnDismiss.addEventListener('click', () => {
+            hidePwaBanner();
+            localStorage.setItem('pwa_banner_dismissed', Date.now().toString());
+        });
+    }
+})();
+
+function showPwaBanner() {
+    // Don't show if dismissed in last 7 days
+    const dismissed = parseInt(localStorage.getItem('pwa_banner_dismissed') || '0');
+    if (dismissed && Date.now() - dismissed < 7 * 24 * 60 * 60 * 1000) return;
+
+    const banner = document.getElementById('pwa-install-banner');
+    if (banner) {
+        setTimeout(() => banner.classList.add('visible'), 1500);
+    }
+}
+
+function hidePwaBanner() {
+    const banner = document.getElementById('pwa-install-banner');
+    if (banner) banner.classList.remove('visible');
+}
+
+
+// ══════════════════════════════════════════════════════════════════
+//  REAL-TIME NOTIFICATIONS — OrionSSE Class
+// ══════════════════════════════════════════════════════════════════
+
+class OrionSSE {
+    constructor() {
+        this._es = null;
+        this._reconnectDelay = 3000;
+        this._maxReconnectDelay = 60000;
+        this._active = false;
+        this._retryCount = 0;
+    }
+
+    start() {
+        if (!currentToken || !currentUser) return;
+        // SSE only meaningful for staff/admin (server returns zeros for parents)
+        if (currentUser.role === 'Parent' || currentUser.role === 'Student') return;
+
+        this._active = true;
+        this._connect();
+
+        // Show the notification bell in header
+        const bellWrap = document.getElementById('notif-bell-wrap');
+        if (bellWrap) bellWrap.style.display = 'flex';
+    }
+
+    stop() {
+        this._active = false;
+        if (this._es) {
+            this._es.close();
+            this._es = null;
+        }
+        // Hide bell and clear badges
+        const bellWrap = document.getElementById('notif-bell-wrap');
+        if (bellWrap) bellWrap.style.display = 'none';
+        this._updateBadges({ messages: 0, fees: 0, announcements: 0, total: 0 });
+
+        // Set live dot to disconnected state
+        const dot = document.querySelector('.notif-live-dot');
+        if (dot) dot.classList.remove('live');
+    }
+
+    _connect() {
+        if (!this._active || !currentToken) return;
+
+        const url = `/api/notifications/stream?token=${encodeURIComponent(currentToken)}`;
+        this._es = new EventSource(url);
+
+        this._es.onopen = () => {
+            console.log('[SSE] Notification stream connected');
+            this._reconnectDelay = 3000;
+            this._retryCount = 0;
+            // Mark live dot as connected
+            const dot = document.querySelector('.notif-live-dot');
+            if (dot) dot.classList.add('live');
+        };
+
+        this._es.onmessage = (event) => {
+            try {
+                const counts = JSON.parse(event.data);
+                if (!counts.error) {
+                    this._updateBadges(counts);
+                }
+            } catch (e) {
+                console.warn('[SSE] Failed to parse notification data:', e);
+            }
+        };
+
+        this._es.onerror = (err) => {
+            console.warn('[SSE] Connection error, reconnecting...');
+            this._es.close();
+            this._es = null;
+
+            // Mark live dot as disconnected
+            const dot = document.querySelector('.notif-live-dot');
+            if (dot) dot.classList.remove('live');
+
+            if (this._active) {
+                const delay = Math.min(this._reconnectDelay * Math.pow(1.5, this._retryCount), this._maxReconnectDelay);
+                this._retryCount++;
+                setTimeout(() => this._connect(), delay);
+            }
+        };
+    }
+
+    _updateBadges(counts) {
+        const { messages = 0, fees = 0, announcements = 0, total = 0 } = counts;
+
+        // Sidebar badge — Communication
+        const msgBadge = document.getElementById('notif-badge-messages');
+        if (msgBadge) {
+            if (messages > 0) {
+                msgBadge.textContent = messages > 99 ? '99+' : messages;
+                msgBadge.style.display = 'inline-flex';
+                msgBadge.classList.toggle('pulse', messages > 0);
+            } else {
+                msgBadge.style.display = 'none';
+            }
+        }
+
+        // Sidebar badge — Finance & Fees
+        const feesBadge = document.getElementById('notif-badge-fees');
+        if (feesBadge) {
+            if (fees > 0) {
+                feesBadge.textContent = fees > 99 ? '99+' : fees;
+                feesBadge.style.display = 'inline-flex';
+            } else {
+                feesBadge.style.display = 'none';
+            }
+        }
+
+        // Header bell global badge
+        const globalBadge = document.getElementById('notif-badge-global');
+        if (globalBadge) {
+            if (total > 0) {
+                globalBadge.textContent = total > 99 ? '99+' : total;
+                globalBadge.style.display = 'inline-flex';
+                globalBadge.classList.add('pulse');
+            } else {
+                globalBadge.style.display = 'none';
+                globalBadge.classList.remove('pulse');
+            }
+        }
+
+        // Update dropdown body
+        this._updateDropdown(counts);
+    }
+
+    _updateDropdown(counts) {
+        const body = document.getElementById('notif-dropdown-body');
+        if (!body) return;
+
+        const items = [];
+
+        if (counts.messages > 0) {
+            items.push(`
+                <div class="notif-item" onclick="switchPanel('panel-communication'); toggleNotifDropdown()">
+                    <div class="notif-item-icon messages"><i class="fa-solid fa-comments"></i></div>
+                    <div class="notif-item-info">
+                        <span class="notif-item-title">${counts.messages} Unread Message${counts.messages !== 1 ? 's' : ''}</span>
+                        <span class="notif-item-sub">From parents — click to view</span>
+                    </div>
+                </div>`);
+        }
+
+        if (counts.fees > 0) {
+            items.push(`
+                <div class="notif-item" onclick="switchPanel('panel-fees'); toggleNotifDropdown()">
+                    <div class="notif-item-icon fees"><i class="fa-solid fa-credit-card"></i></div>
+                    <div class="notif-item-info">
+                        <span class="notif-item-title">${counts.fees} Unpaid Fee Bill${counts.fees !== 1 ? 's' : ''}</span>
+                        <span class="notif-item-sub">Pending payments — click to view</span>
+                    </div>
+                </div>`);
+        }
+
+        if (counts.announcements > 0) {
+            items.push(`
+                <div class="notif-item" onclick="switchPanel('panel-communication'); toggleNotifDropdown()">
+                    <div class="notif-item-icon announcements"><i class="fa-solid fa-bullhorn"></i></div>
+                    <div class="notif-item-info">
+                        <span class="notif-item-title">${counts.announcements} New Announcement${counts.announcements !== 1 ? 's' : ''} (7 days)</span>
+                        <span class="notif-item-sub">Click to view communications</span>
+                    </div>
+                </div>`);
+        }
+
+        body.innerHTML = items.length > 0
+            ? items.join('')
+            : '<div class="notif-item-placeholder"><i class="fa-solid fa-circle-check"></i> All caught up!</div>';
+    }
+}
+
+// Toggle notification dropdown panel
+function toggleNotifDropdown() {
+    const panel = document.getElementById('notif-dropdown-panel');
+    if (panel) panel.classList.toggle('open');
+}
+window.toggleNotifDropdown = toggleNotifDropdown;
+
+// Wire notification bell click
+document.addEventListener('DOMContentLoaded', () => {
+    const bell = document.getElementById('btn-notif-bell');
+    if (bell) bell.addEventListener('click', (e) => {
+        e.stopPropagation();
+        toggleNotifDropdown();
+    });
+
+    // Close dropdown on outside click
+    document.addEventListener('click', (e) => {
+        const panel = document.getElementById('notif-dropdown-panel');
+        const wrap = document.getElementById('notif-bell-wrap');
+        if (panel && wrap && !wrap.contains(e.target)) {
+            panel.classList.remove('open');
+        }
+    });
+});
+
+// Start SSE after login, stop on logout
+// Hook into the existing parseTokenAndRoute and handleLogout functions
+const _origHandleLogout = window.handleLogout || handleLogout;
+
+(function patchLoginLogout() {
+    // Patch handleLogout to stop SSE
+    const origLogout = handleLogout;
+    window.handleLogout = function() {
+        if (_orionSSE) {
+            _orionSSE.stop();
+            _orionSSE = null;
+        }
+        origLogout.apply(this, arguments);
+    };
+    // Also export for legacy callers
+    if (typeof handleLogout !== 'undefined') {
+        // Already assigned above via window.handleLogout
+    }
+})();
+
+// Called after successful login to start real-time updates
+function startOrionSSE() {
+    if (_orionSSE) {
+        _orionSSE.stop();
+    }
+    _orionSSE = new OrionSSE();
+    _orionSSE.start();
+
+    // Also fetch initial counts immediately (before first SSE event arrives)
+    if (currentToken && currentUser && currentUser.role !== 'Parent' && currentUser.role !== 'Student') {
+        apiFetch('/api/notifications/counts')
+            .then(counts => {
+                if (_orionSSE) _orionSSE._updateBadges(counts);
+            })
+            .catch(() => {}); // Silently ignore if unavailable
+    }
+}
+window.startOrionSSE = startOrionSSE;

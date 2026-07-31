@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Offline — Orion School System</title>
+    <style>
+        :root {
+            --bg: #0f1117;
+            --surface: #1a1d2e;
+            --border: rgba(255,255,255,0.08);
+            --text-primary: #e8eaf6;
+            --text-secondary: #9197b3;
+            --accent: #f59e0b;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            min-height: 100vh;
+            background: var(--bg);
+            color: var(--text-primary);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+        }
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 3rem 2.5rem;
+            max-width: 420px;
+            width: 90%;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.4);
+        }
+        .icon-wrap {
+            width: 80px; height: 80px;
+            background: rgba(245,158,11,0.12);
+            border: 2px solid rgba(245,158,11,0.3);
+            border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            margin: 0 auto 1.5rem;
+            font-size: 2rem;
+        }
+        h1 { font-size: 1.6rem; margin-bottom: 0.75rem; }
+        p  { color: var(--text-secondary); line-height: 1.6; margin-bottom: 1.5rem; }
+        .btn {
+            display: inline-block;
+            background: var(--accent);
+            color: #0f1117;
+            padding: 0.7rem 2rem;
+            border-radius: 10px;
+            font-weight: 700;
+            cursor: pointer;
+            border: none;
+            font-size: 0.95rem;
+            transition: opacity 0.2s;
+        }
+        .btn:hover { opacity: 0.85; }
+        .queued-notice {
+            margin-top: 1.5rem;
+            padding: 0.75rem 1rem;
+            background: rgba(245,158,11,0.08);
+            border: 1px solid rgba(245,158,11,0.2);
+            border-radius: 10px;
+            font-size: 0.82rem;
+            color: var(--accent);
+        }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <div class="icon-wrap">📡</div>
+        <h1>You're Offline</h1>
+        <p>Orion School System is not reachable right now. Any attendance or marks you saved will be automatically synced when your connection restores.</p>
+        <button class="btn" onclick="window.location.reload()">Try Again</button>
+        <div class="queued-notice">
+            💾 Offline actions are queued and will sync automatically
+        </div>
+    </div>
+</body>
+</html>

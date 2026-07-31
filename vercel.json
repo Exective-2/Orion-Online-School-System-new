@@ -32,6 +32,27 @@
       "dest": "web/assets/$1"
     },
     {
+      "src": "/icons/(.*)",
+      "dest": "web/icons/$1"
+    },
+    {
+      "src": "/manifest.json",
+      "dest": "web/manifest.json",
+      "headers": { "Content-Type": "application/manifest+json" }
+    },
+    {
+      "src": "/sw.js",
+      "dest": "web/sw.js",
+      "headers": {
+        "Content-Type": "application/javascript",
+        "Service-Worker-Allowed": "/"
+      }
+    },
+    {
+      "src": "/offline.html",
+      "dest": "web/offline.html"
+    },
+    {
       "src": "/(.*)",
       "dest": "web/index.html"
     }

@@ -4,6 +4,16 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Orion School Management System</title>
+    <meta name="description" content="Complete school management system for attendance, marks, fees, and parent communication.">
+
+    <!-- PWA Meta Tags -->
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#0f1117">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Orion SMS">
+    <link rel="apple-touch-icon" href="/icons/icon-192.png">
+    <meta name="mobile-web-app-capable" content="yes">
     
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -20,10 +30,31 @@
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     
     <!-- Stylesheet -->
-    <link rel="stylesheet" href="/css/styles.css?v=20260731_1348">
+    <link rel="stylesheet" href="/css/styles.css?v=20260731_pwa">
 </head>
 <body class="dark-theme">
-    
+
+    <!-- ── PWA Install Banner ── -->
+    <div id="pwa-install-banner" class="pwa-install-banner" role="banner" aria-live="polite">
+        <div class="pwa-install-content">
+            <img src="/icons/icon-192.png" class="pwa-install-icon" alt="Orion SMS icon">
+            <div class="pwa-install-text">
+                <strong>Install Orion SMS</strong>
+                <span>Add to your home screen for quick offline access</span>
+            </div>
+        </div>
+        <div class="pwa-install-actions">
+            <button class="pwa-install-btn" id="btn-pwa-install" aria-label="Install app">Install</button>
+            <button class="pwa-install-dismiss" id="btn-pwa-dismiss" aria-label="Dismiss install banner">×</button>
+        </div>
+    </div>
+
+    <!-- ── Offline Indicator ── -->
+    <div id="offline-indicator" class="offline-indicator" role="status" aria-live="assertive">
+        <i class="fa-solid fa-wifi-slash"></i>
+        <span>You're offline — data is cached. Queued actions will sync when reconnected.</span>
+    </div>
+
     <!-- Toast Notifications -->
     <div id="toast-container"></div>
     
@@ -310,12 +341,12 @@
                             <li><a href="#" class="nav-link" data-target="panel-exams"><i class="fa-solid fa-file-invoice"></i> Examinations</a></li>
                             <li><a href="#" class="nav-link" data-target="panel-result-approvals"><i class="fa-solid fa-stamp"></i> Result Approvals</a></li>
                             <li><a href="#" class="nav-link" data-target="panel-report-cards"><i class="fa-solid fa-file-pdf"></i> Report Cards</a></li>
-                            <li><a href="#" class="nav-link" data-target="panel-fees"><i class="fa-solid fa-credit-card"></i> Finance & Fees</a></li>
+                            <li><a href="#" class="nav-link" data-target="panel-fees"><i class="fa-solid fa-credit-card"></i> Finance & Fees <span class="notif-badge" id="notif-badge-fees" style="display:none;">0</span></a></li>
                             <li><a href="#" class="nav-link" data-target="panel-payroll"><i class="fa-solid fa-money-check-dollar"></i> Payroll Management</a></li>
                             <li><a href="#" class="nav-link" data-target="panel-library"><i class="fa-solid fa-book-open"></i> Library Books</a></li>
                             <li><a href="#" class="nav-link" data-target="panel-inventory"><i class="fa-solid fa-cubes"></i> Inventory</a></li>
                             <li><a href="#" class="nav-link" data-target="panel-timetable"><i class="fa-solid fa-calendar-days"></i> Timetables</a></li>
-                            <li><a href="#" class="nav-link" data-target="panel-communication"><i class="fa-solid fa-message"></i> Communication</a></li>
+                            <li><a href="#" class="nav-link" data-target="panel-communication"><i class="fa-solid fa-message"></i> Communication <span class="notif-badge" id="notif-badge-messages" style="display:none;">0</span></a></li>
                             <li><a href="#" class="nav-link" data-target="panel-settings"><i class="fa-solid fa-sliders"></i> Configurations</a></li>
                             <li><a href="#" class="nav-link" data-target="panel-support-tickets"><i class="fa-solid fa-headset"></i> Help & Support Tickets</a></li>
                             <li id="sidebar-sysadmin-link" class="sysadmin-only" style="display: none;">
@@ -356,6 +387,24 @@
                             <span class="badge badge-branch" id="header-branch-badge"><i class="fa-solid fa-code-branch"></i> Main Campus</span>
                             <select id="header-branch-switcher" style="display:none; font-size:12px; font-weight:700; background:rgba(99,102,241,0.25); color:#ffffff; border:1px solid #818cf8; border-radius:6px; padding:4px 8px; cursor:pointer;" title="Switch Branch Context"></select>
                             <span class="badge badge-academic" id="header-academic-badge"><i class="fa-solid fa-calendar"></i> 2026/2027 - Term 1</span>
+
+                            <!-- Real-time notification bell -->
+                            <div class="notif-bell-wrap" id="notif-bell-wrap" style="display:none;" title="Notifications">
+                                <button class="btn-icon notif-bell-btn" id="btn-notif-bell" aria-label="Notifications">
+                                    <i class="fa-solid fa-bell"></i>
+                                    <span class="notif-bell-badge" id="notif-badge-global" style="display:none;">0</span>
+                                </button>
+                                <!-- Notification dropdown panel -->
+                                <div class="notif-dropdown shadow-lg" id="notif-dropdown-panel">
+                                    <div class="notif-dropdown-header">
+                                        <i class="fa-solid fa-bell-ring"></i> Live Notifications
+                                        <span class="notif-live-dot" title="Live SSE connection"></span>
+                                    </div>
+                                    <div class="notif-dropdown-body" id="notif-dropdown-body">
+                                        <div class="notif-item-placeholder">No new notifications</div>
+                                    </div>
+                                </div>
+                            </div>
                             
                             <div class="theme-picker-container">
                                 <button class="btn-icon" id="btn-theme-toggle" title="Select Theme Options">

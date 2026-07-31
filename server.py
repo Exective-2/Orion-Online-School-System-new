@@ -3,15 +3,17 @@ import sys
 import re
 import time
 import jwt
+import json
+import asyncio
 import hashlib
 import datetime
-from typing import Optional, List, Union, Any
+from typing import Optional, List, Union, Any, AsyncGenerator
 from pathlib import Path
 
 from fastapi import FastAPI, Depends, HTTPException, status, Header, Request, UploadFile, File, Form, Body, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, JSONResponse, HTMLResponse
+from fastapi.responses import FileResponse, JSONResponse, HTMLResponse, StreamingResponse
 from pydantic import BaseModel
 
 from database.connection import get_session, init_db, current_db_url, close_branch_engine, get_branch_db_url
@@ -7502,6 +7504,104 @@ def generate_ai_remarks(req: AIRemarkRequest, user=Depends(get_current_user)):
     finally:
         session.close()
 
+# ─────────────────────────────────────────────────────────────────────────
+# REAL-TIME NOTIFICATIONS — SSE Endpoint
+# ─────────────────────────────────────────────────────────────────────────
+
+def _get_notification_counts(user: dict) -> dict:
+    """Query the branch DB for real-time notification badge counts."""
+    role = user.get("role", "")
+    counts = {"messages": 0, "fees": 0, "announcements": 0, "total": 0}
+
+    # Only fetch counts for staff / admin roles (not parent/student)
+    if role in ("Parent", "Student"):
+        return counts
+
+    session = get_session()
+    try:
+        # Unread parent-to-school messages
+        try:
+            unread_msgs = session.query(ParentMessage).filter(
+                ParentMessage.sender_type == "Parent",
+                ParentMessage.is_read == False
+            ).count()
+            counts["messages"] = unread_msgs
+        except Exception:
+            counts["messages"] = 0
+
+        # Unpaid student bills (pending fee payments) — accountant / admin relevant
+        if role in ("Admin/Headteacher", "Super Admin", "Accountant", "Bursar", "System Admin"):
+            try:
+                pending_fees = session.query(StudentBill).filter(
+                    StudentBill.status == "Unpaid"
+                ).count()
+                counts["fees"] = min(pending_fees, 99)  # cap badge at 99
+            except Exception:
+                counts["fees"] = 0
+
+        # Unread/recent announcements (last 7 days)
+        try:
+            week_ago = datetime.datetime.utcnow() - datetime.timedelta(days=7)
+            new_announcements = session.query(Announcement).filter(
+                Announcement.created_at >= week_ago
+            ).count()
+            counts["announcements"] = new_announcements
+        except Exception:
+            counts["announcements"] = 0
+
+        counts["total"] = counts["messages"] + counts["fees"] + counts["announcements"]
+    finally:
+        session.close()
+
+    return counts
+
+
+@app.get("/api/notifications/counts")
+def get_notification_counts(user=Depends(get_current_user)):
+    """Single-shot snapshot of notification badge counts (used on page load)."""
+    return _get_notification_counts(user)
+
+
+@app.get("/api/notifications/stream")
+async def notification_stream(user=Depends(get_current_user)):
+    """
+    Server-Sent Events stream for real-time notification badges.
+    Emits JSON counts every 8 seconds.
+    NOTE: On Vercel serverless the 30s function timeout means keep-alive comments
+    are sent every 5s to prevent premature disconnects.
+    """
+    async def event_generator() -> AsyncGenerator[str, None]:
+        keepalive_counter = 0
+        while True:
+            try:
+                counts = _get_notification_counts(user)
+                yield f"data: {json.dumps(counts)}\n\n"
+                # Send keepalive comment every 5s (between data events)
+                for _ in range(8):
+                    await asyncio.sleep(1)
+                    keepalive_counter += 1
+                    if keepalive_counter % 5 == 0:
+                        yield ": keepalive\n\n"
+            except asyncio.CancelledError:
+                # Client disconnected cleanly
+                break
+            except Exception as e:
+                print(f"[SSE] Error in notification stream: {e}")
+                yield f"data: {json.dumps({'error': True, 'total': 0, 'messages': 0, 'fees': 0, 'announcements': 0})}\n\n"
+                await asyncio.sleep(15)
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+        }
+    )
+
+
+# ─────────────────────────────────────────────────────────────────────────
 # --- Serve Uploaded Files & Static HTML App ---
 web_dir = APP_DIR / "web"
 
@@ -7568,9 +7668,32 @@ def get_index():
         return FileResponse(str(index_path))
     return JSONResponse({"status": "error", "message": "Frontend files not found. Please create web/index.html"}, status_code=404)
 
+# PWA: Serve manifest, service worker, and offline page from web root
+@app.get("/manifest.json")
+def serve_manifest():
+    path = web_dir / "manifest.json"
+    if path.exists():
+        return FileResponse(str(path), media_type="application/manifest+json")
+    raise HTTPException(status_code=404, detail="manifest.json not found")
+
+@app.get("/sw.js")
+def serve_service_worker():
+    path = web_dir / "sw.js"
+    if path.exists():
+        return FileResponse(str(path), media_type="application/javascript",
+                            headers={"Service-Worker-Allowed": "/"})
+    raise HTTPException(status_code=404, detail="sw.js not found")
+
+@app.get("/offline.html")
+def serve_offline_page():
+    path = web_dir / "offline.html"
+    if path.exists():
+        return FileResponse(str(path), media_type="text/html")
+    raise HTTPException(status_code=404, detail="offline.html not found")
+
 if web_dir.exists():
     app.mount("/static", StaticFiles(directory=str(web_dir)), name="static")
-    for subdir in ["css", "js", "assets", "img"]:
+    for subdir in ["css", "js", "assets", "img", "icons"]:
          sd = web_dir / subdir
          if sd.exists():
              app.mount(f"/{subdir}", StaticFiles(directory=str(sd)), name=f"static_{subdir}")
