@@ -3741,11 +3741,57 @@ def sync_system_fee(session, user: dict = None):
 
         if br_obj and (br_obj.system_fee or 0.0) > 0:
             sys_fee_amount = float(br_obj.system_fee)
-            sys_fee = session.query(Fee).filter(
+
+            # --- Deduplication: merge all system fee rows into one canonical row ---
+            all_sys_fees = session.query(Fee).filter(
                 Fee.academic_year_id == y_id,
                 Fee.term_id == t_id,
                 Fee.is_system_fee == True
-            ).first()
+            ).order_by(Fee.id.asc()).all()
+
+            if len(all_sys_fees) > 1:
+                # Keep the first (lowest id) as canonical; reassign bills from duplicates
+                canonical = all_sys_fees[0]
+                for dup_fee in all_sys_fees[1:]:
+                    # Reassign bills that reference this duplicate fee id
+                    dup_bills = session.query(StudentBill).filter(
+                        StudentBill.fee_id == dup_fee.id
+                    ).all()
+                    for dup_bill in dup_bills:
+                        # Check if canonical already has a bill for this student
+                        existing_canonical_bill = session.query(StudentBill).filter(
+                            StudentBill.student_id == dup_bill.student_id,
+                            StudentBill.fee_id == canonical.id
+                        ).first()
+                        if existing_canonical_bill:
+                            # Merge: carry over any payments made on the duplicate
+                            if dup_bill.amount_paid > 0:
+                                existing_canonical_bill.amount_paid += dup_bill.amount_paid
+                                existing_canonical_bill.amount_billed = max(
+                                    existing_canonical_bill.amount_billed, dup_bill.amount_billed
+                                )
+                                # Recalculate status
+                                paid = existing_canonical_bill.amount_paid
+                                billed = existing_canonical_bill.amount_billed
+                                if paid >= billed:
+                                    existing_canonical_bill.status = "Paid"
+                                elif paid > 0:
+                                    existing_canonical_bill.status = "Partially Paid"
+                                else:
+                                    existing_canonical_bill.status = "Unpaid"
+                            # Delete the duplicate bill (payments cascade)
+                            session.delete(dup_bill)
+                        else:
+                            # Reassign the duplicate bill to the canonical fee row
+                            dup_bill.fee_id = canonical.id
+                    # Now delete the duplicate fee row
+                    session.delete(dup_fee)
+                session.flush()
+                sys_fee = canonical
+            elif len(all_sys_fees) == 1:
+                sys_fee = all_sys_fees[0]
+            else:
+                sys_fee = None
 
             if not sys_fee:
                 sys_fee = Fee(
@@ -4640,21 +4686,36 @@ def get_fee_balances(user=Depends(get_current_user)):
     session = get_session()
     try:
         bills = session.query(StudentBill).all()
-        res = []
+
+        # Aggregate per student: sum billed and paid across all fee types
+        student_map = {}
         for b in bills:
-            bal = b.amount_billed - b.amount_paid
+            sid = b.student_id
+            if sid not in student_map:
+                st = b.student
+                student_map[sid] = {
+                    "student_id": sid,
+                    "student_name": f"{st.last_name}, {st.first_name}" if st else "N/A",
+                    "class_name": st.class_assigned.name if (st and st.class_assigned) else "N/A",
+                    "total_billed": 0.0,
+                    "total_paid": 0.0,
+                }
+            student_map[sid]["total_billed"] += b.amount_billed
+            student_map[sid]["total_paid"] += b.amount_paid
+
+        res = []
+        for sid, data in student_map.items():
+            bal = data["total_billed"] - data["total_paid"]
             if bal > 0:
-                res.append({
-                    "student_id": b.student_id,
-                    "student_name": f"{b.student.last_name}, {b.student.first_name}" if b.student else "N/A",
-                    "class_name": b.student.class_assigned.name if (b.student and b.student.class_assigned) else "N/A",
-                    "total_billed": b.amount_billed,
-                    "total_paid": b.amount_paid,
-                    "balance": bal
-                })
+                data["balance"] = bal
+                res.append(data)
+
+        # Sort by student name for consistent ordering
+        res.sort(key=lambda x: x["student_name"])
         return res
     finally:
         session.close()
+
 
 # --- Library API ---
 @app.get("/api/library/books")

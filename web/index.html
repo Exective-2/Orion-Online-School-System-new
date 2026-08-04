@@ -3720,6 +3720,25 @@
             </div>
             <form id="form-admit-student">
                 <div class="modal-body">
+                    <!-- Photo Upload Section -->
+                    <div style="display:flex; align-items:center; gap:20px; margin-bottom:20px; padding:16px; background:rgba(99,102,241,0.06); border:1px dashed rgba(99,102,241,0.3); border-radius:12px;">
+                        <div id="admit-photo-preview-wrap" style="position:relative; width:90px; height:90px; border-radius:50%; background:rgba(255,255,255,0.07); border:2px dashed rgba(99,102,241,0.4); display:flex; align-items:center; justify-content:center; cursor:pointer; overflow:hidden; flex-shrink:0;" onclick="document.getElementById('stud-photo').click()" title="Click to upload student photo">
+                            <img id="admit-photo-preview" src="" alt="" style="width:100%; height:100%; object-fit:cover; display:none; border-radius:50%;">
+                            <div id="admit-photo-placeholder" style="text-align:center; color:rgba(255,255,255,0.4);">
+                                <i class="fa-solid fa-user" style="font-size:28px; display:block; margin-bottom:4px;"></i>
+                                <span style="font-size:9px; line-height:1.2;">Upload<br>Photo</span>
+                            </div>
+                        </div>
+                        <div>
+                            <label style="font-weight:600; display:block; margin-bottom:6px; color:var(--text-secondary);">Student Photo <span style="font-size:11px; color:var(--text-muted); font-weight:400;">(optional)</span></label>
+                            <input type="file" id="stud-photo" accept="image/*" style="display:none;" onchange="previewAdmitPhoto(this)">
+                            <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('stud-photo').click()">
+                                <i class="fa-solid fa-camera"></i> Choose Photo
+                            </button>
+                            <p style="margin:6px 0 0; font-size:11px; color:var(--text-muted);">Accepted: JPG, PNG, WEBP. Photo shows on student records &amp; reports.</p>
+                        </div>
+                    </div>
+
                     <h3>Student Personal Details</h3>
                     <div class="form-grid">
                         <div class="form-group">

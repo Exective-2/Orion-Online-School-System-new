@@ -1718,13 +1718,46 @@ function loadPromoStudentsList() {
         });
 }
 
+// Photo preview helper for admit student modal
+function previewAdmitPhoto(input) {
+    const file = input.files && input.files[0];
+    const preview = document.getElementById("admit-photo-preview");
+    const placeholder = document.getElementById("admit-photo-placeholder");
+    if (file && preview) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            preview.src = e.target.result;
+            preview.style.display = "block";
+            if (placeholder) placeholder.style.display = "none";
+        };
+        reader.readAsDataURL(file);
+    }
+}
+
+function resetAdmitStudentPhoto() {
+    const preview = document.getElementById("admit-photo-preview");
+    const placeholder = document.getElementById("admit-photo-placeholder");
+    const fileInput = document.getElementById("stud-photo");
+    if (preview) { preview.src = ""; preview.style.display = "none"; }
+    if (placeholder) placeholder.style.display = "flex";
+    if (fileInput) fileInput.value = "";
+}
+
 // Admit student Trigger and modal
 document.getElementById("btn-admit-student-trigger").addEventListener("click", () => {
+    resetAdmitStudentPhoto();
     document.getElementById("modal-admit-student").classList.add("show");
 });
 
-document.getElementById("form-admit-student").addEventListener("submit", (e) => {
+document.getElementById("form-admit-student").addEventListener("submit", async (e) => {
     e.preventDefault();
+    const submitBtn = e.target.querySelector("button[type='submit']");
+    const origHtml = submitBtn ? submitBtn.innerHTML : "";
+    if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Enrolling...`;
+    }
+
     const payload = {
         first_name: document.getElementById("stud-fname").value,
         last_name: document.getElementById("stud-lname").value,
@@ -1741,18 +1774,37 @@ document.getElementById("form-admit-student").addEventListener("submit", (e) => 
             address: document.getElementById("admit-parent-addr").value
         }
     };
-    
-    apiFetch("/api/students", {
-        method: "POST",
-        body: payload
-    })
-    .then(data => {
+
+    try {
+        const data = await apiFetch("/api/students", { method: "POST", body: payload });
+        const studentId = data.id;
+
+        // Upload photo if one was selected
+        const photoFile = document.getElementById("stud-photo")?.files[0];
+        if (photoFile && studentId) {
+            try {
+                const formData = new FormData();
+                formData.append("file", photoFile);
+                await apiFetch(`/api/students/${studentId}/photo`, { method: "POST", body: formData });
+            } catch (photoErr) {
+                console.warn("Photo upload failed (student still saved):", photoErr);
+                showToast("Student admitted, but photo upload failed. You can add it later.", "warning");
+            }
+        }
+
         showToast("Student admitted successfully!", "success");
         document.getElementById("modal-admit-student").classList.remove("show");
         document.getElementById("form-admit-student").reset();
+        resetAdmitStudentPhoto();
         loadStudentsList();
-    })
-    .catch(err => showToast(err.message, "error"));
+    } catch (err) {
+        showToast(err.message, "error");
+    } finally {
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = origHtml || `<i class="fa-solid fa-check"></i> Enroll Student`;
+        }
+    }
 });
 
 // Promos check-all selector
