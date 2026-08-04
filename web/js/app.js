@@ -1637,6 +1637,7 @@ function loadStudentsPanel() {
     document.getElementById("search-student-input").addEventListener("input", loadStudentsList);
     document.getElementById("filter-student-class").addEventListener("change", loadStudentsList);
     document.getElementById("filter-student-status").addEventListener("change", loadStudentsList);
+    document.getElementById("sort-student-by").addEventListener("change", loadStudentsList);
     
     // Promos src class listener to show students to promote
     document.getElementById("promo-src-class").addEventListener("change", loadPromoStudentsList);
@@ -1646,30 +1647,52 @@ function loadStudentsList() {
     const search = document.getElementById("search-student-input").value;
     const cid = document.getElementById("filter-student-class").value;
     const stat = document.getElementById("filter-student-status").value;
-    
+    const sortBy = document.getElementById("sort-student-by")?.value || "name";
+
     let url = `/api/students?status=${stat}`;
     if (search) url += `&search=${encodeURIComponent(search)}`;
     if (cid) url += `&class_id=${cid}`;
-    
+
     apiFetch(url)
         .then(students => {
             const tbody = document.querySelector("#students-table tbody");
             tbody.innerHTML = "";
             if (students.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="6" class="text-center">No students found.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="8" class="text-center">No students found.</td></tr>';
                 return;
             }
-            students.forEach(s => {
+
+            // Client-side sort
+            students.sort((a, b) => {
+                if (sortBy === "id") return a.id.localeCompare(b.id, undefined, { numeric: true });
+                if (sortBy === "class") return (a.class_name || "").localeCompare(b.class_name || "");
+                // default: name
+                return `${a.last_name} ${a.first_name}`.localeCompare(`${b.last_name} ${b.first_name}`);
+            });
+
+            students.forEach((s, idx) => {
                 const fullName = `${s.first_name} ${s.last_name}`;
+                const safeFullName = fullName.replace(/'/g, "\\'");
+                const safeClass = (s.class_name || "").replace(/'/g, "\\'");
+
+                // Photo or avatar placeholder
+                const photoHtml = s.photo_path
+                    ? `<img src="/${s.photo_path}" alt="${s.first_name}" style="width:40px; height:40px; border-radius:50%; object-fit:cover; border:2px solid rgba(99,102,241,0.4);">`
+                    : `<div style="width:40px; height:40px; border-radius:50%; background:linear-gradient(135deg,#6366f1,#8b5cf6); display:flex; align-items:center; justify-content:center; font-weight:700; color:#fff; font-size:14px; margin:auto;">${(s.first_name[0] || '').toUpperCase()}${(s.last_name[0] || '').toUpperCase()}</div>`;
+
+                const statusClass = s.status === 'Active' ? 'badge-success' : s.status === 'Withdrawn' ? 'badge-danger' : 'badge-branch';
+
                 tbody.innerHTML += `
                     <tr>
-                        <td><strong>${s.id}</strong></td>
-                        <td>${s.last_name}, ${s.first_name} ${s.other_names || ""}</td>
+                        <td style="text-align:center; color:var(--text-muted); font-size:12px; font-weight:600;">${idx + 1}</td>
+                        <td><strong style="font-family:monospace; font-size:12px; color:var(--accent-primary);">${s.id}</strong></td>
+                        <td style="text-align:center;">${photoHtml}</td>
+                        <td><span style="font-weight:600;">${s.last_name}, ${s.first_name}</span>${s.other_names ? ` <span style="color:var(--text-muted); font-size:12px;">${s.other_names}</span>` : ""}</td>
                         <td>${s.class_name}</td>
-                        <td>${s.parent_phone}</td>
-                        <td><span class="badge badge-branch">${s.status}</span></td>
-                        <td>
-                            <div style="display:flex; gap:6px;">
+                        <td><span style="font-size:13px;"><i class="fa-solid fa-phone" style="color:var(--text-muted); font-size:11px;"></i> ${s.parent_phone}</span></td>
+                        <td><span class="badge ${statusClass}">${s.status}</span></td>
+                        <td style="text-align:center;">
+                            <div style="display:flex; gap:5px; justify-content:center;">
                                 <button type="button" class="btn btn-secondary btn-icon" title="Print ID Card" onclick="viewPdf('/api/students/${s.id}/id-card', 'ID_Card_${s.id}.pdf')">
                                     <i class="fa-solid fa-address-card"></i>
                                 </button>
@@ -1679,7 +1702,7 @@ function loadStudentsList() {
                                 <button type="button" class="btn btn-primary btn-icon" title="Edit Student" onclick="openEditStudentModal('${s.id}')">
                                     <i class="fa-solid fa-user-pen"></i>
                                 </button>
-                                <button type="button" class="btn btn-danger btn-icon" title="Delete Student" onclick="openDeleteStudentModal('${s.id}', '${fullName.replace(/'/g, "\\'")}', '${s.class_name.replace(/'/g, "\\'")}')">
+                                <button type="button" class="btn btn-danger btn-icon" title="Delete Student" onclick="openDeleteStudentModal('${s.id}', '${safeFullName}', '${safeClass}')">
                                     <i class="fa-solid fa-trash"></i>
                                 </button>
                             </div>

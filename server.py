@@ -855,7 +855,8 @@ def get_students(search: Optional[str] = "", class_id: Optional[int] = None, sta
                 "parent_name": f"{s.parent.first_name} {s.parent.last_name}" if s.parent else "N/A",
                 "parent_phone": s.parent.phone if s.parent else "N/A",
                 "dob": s.date_of_birth.strftime("%Y-%m-%d") if s.date_of_birth else "",
-                "gender": s.gender
+                "gender": s.gender,
+                "photo_path": s.photo_path or ""
             } for s in students
         ]
     finally:

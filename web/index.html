@@ -616,24 +616,34 @@
                                                 <option value="Alumnus">Alumnus</option>
                                             </select>
                                         </div>
+                                        <div class="filter-group">
+                                            <select id="sort-student-by" class="form-control">
+                                                <option value="name">Sort: Name</option>
+                                                <option value="id">Sort: ID</option>
+                                                <option value="class">Sort: Class</option>
+                                            </select>
+                                        </div>
                                     </div>
                                     
                                     <table class="table" id="students-table">
                                         <thead>
                                             <tr>
+                                                <th style="width:40px; text-align:center;">#</th>
                                                 <th>ID</th>
+                                                <th style="width:70px; text-align:center;">Photo</th>
                                                 <th>Name</th>
                                                 <th>Class</th>
                                                 <th>Parent Contact</th>
                                                 <th>Status</th>
-                                                <th>Actions</th>
+                                                <th style="text-align:center;">Actions</th>
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            <tr><td colspan="6" class="text-center">Loading student list...</td></tr>
+                                            <tr><td colspan="8" class="text-center">Loading student list...</td></tr>
                                         </tbody>
                                     </table>
                                 </div>
+
                                 
                                 <div class="tab-content" id="tab-student-promo">
                                     <div class="promo-bar">
