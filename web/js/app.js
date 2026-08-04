@@ -1675,10 +1675,14 @@ function loadStudentsList() {
                 const safeFullName = fullName.replace(/'/g, "\\'");
                 const safeClass = (s.class_name || "").replace(/'/g, "\\'");
 
-                // Photo or avatar placeholder
-                const photoHtml = s.photo_path
-                    ? `<img src="/${s.photo_path}" alt="${s.first_name}" style="width:40px; height:40px; border-radius:50%; object-fit:cover; border:2px solid rgba(99,102,241,0.4);">`
+                // Photo or avatar placeholder — handle data URI (Vercel) and file path (local)
+                const photoSrc = s.photo_path
+                    ? (s.photo_path.startsWith("data:") ? s.photo_path : `/${s.photo_path}?v=${Date.now()}`)
+                    : null;
+                const photoHtml = photoSrc
+                    ? `<img src="${photoSrc}" alt="${s.first_name}" style="width:40px; height:40px; border-radius:50%; object-fit:cover; border:2px solid rgba(99,102,241,0.4);">`
                     : `<div style="width:40px; height:40px; border-radius:50%; background:linear-gradient(135deg,#6366f1,#8b5cf6); display:flex; align-items:center; justify-content:center; font-weight:700; color:#fff; font-size:14px; margin:auto;">${(s.first_name[0] || '').toUpperCase()}${(s.last_name[0] || '').toUpperCase()}</div>`;
+
 
                 const statusClass = s.status === 'Active' ? 'badge-success' : s.status === 'Withdrawn' ? 'badge-danger' : 'badge-branch';
 

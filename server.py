@@ -1078,26 +1078,33 @@ def delete_student(student_id: str, user=Depends(get_current_user)):
 
 @app.post("/api/students/{student_id}/photo")
 async def upload_student_photo(student_id: str, file: UploadFile = File(...), user=Depends(get_current_user)):
-    import shutil
+    import shutil, base64
     session = get_session()
     try:
         student = session.query(Student).filter(Student.id == student_id).first()
         if not student:
             raise HTTPException(status_code=404, detail="Student not found")
-        
-        uploads_dir = UPLOADS_DIR
-        uploads_dir.mkdir(parents=True, exist_ok=True)
-        
+
+        file_bytes = await file.read()
         ext = os.path.splitext(file.filename)[1].lower() or ".jpg"
-        filename = f"student_{student_id}{ext}"
-        filepath = uploads_dir / filename
-        
-        with open(filepath, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
-            
-        student.photo_path = f"uploads/{filename}"
+        mime_map = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".webp": "image/webp", ".gif": "image/gif"}
+        mime_type = mime_map.get(ext, "image/jpeg")
+
+        if IS_VERCEL:
+            # On Vercel /tmp is ephemeral — store photo as base64 data URI directly in DB
+            b64 = base64.b64encode(file_bytes).decode("utf-8")
+            student.photo_path = f"data:{mime_type};base64,{b64}"
+        else:
+            # Local / desktop: save to disk as before
+            uploads_dir = UPLOADS_DIR
+            uploads_dir.mkdir(parents=True, exist_ok=True)
+            filename = f"student_{student_id}{ext}"
+            filepath = uploads_dir / filename
+            with open(filepath, "wb") as buffer:
+                buffer.write(file_bytes)
+            student.photo_path = f"uploads/{filename}"
+
         session.commit()
-        
         log_audit(user, "Upload Student Photo", f"Uploaded photo for student {student_id}")
         return {"status": "success", "photo_path": student.photo_path}
     except Exception as e:
