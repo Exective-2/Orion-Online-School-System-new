@@ -1034,6 +1034,7 @@ def get_student(student_id: str, user=Depends(get_current_user)):
             "class_id": student.class_id,
             "class_name": student.class_assigned.name if student.class_assigned else "Unassigned",
             "status": student.status,
+            "photo_path": student.photo_path or "",
             "parent": {
                 "first_name": student.parent.first_name if student.parent else "",
                 "last_name": student.parent.last_name if student.parent else "",

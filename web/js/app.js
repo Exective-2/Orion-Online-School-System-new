@@ -735,7 +735,8 @@ function openEditStudentModal(studentId) {
             
             if (student.photo_path) {
                 if (img) {
-                    img.src = "/" + student.photo_path + "?t=" + Date.now();
+                    const src = student.photo_path.startsWith("data:") ? student.photo_path : "/" + student.photo_path + "?t=" + Date.now();
+                    img.src = src;
                     img.style.display = "block";
                 }
                 if (placeholder) placeholder.style.display = "none";
@@ -966,7 +967,8 @@ function initGlobalEventListeners() {
                 uploadPhotoBtn.disabled = true;
                 
                 if (previewImg) {
-                    previewImg.src = "/" + data.photo_path + "?t=" + Date.now();
+                    const src = data.photo_path && data.photo_path.startsWith("data:") ? data.photo_path : "/" + data.photo_path + "?t=" + Date.now();
+                    previewImg.src = src;
                 }
                 loadStudentsList();
             })
