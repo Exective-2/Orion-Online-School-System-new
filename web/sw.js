@@ -3,7 +3,7 @@
 //  Version: 1.0.0  |  Strategy: Cache-first static, Network-first API
 // ══════════════════════════════════════════════════════════════════
 
-const CACHE_NAME = 'orion-v1';
+const CACHE_NAME = 'orion-v1.0.2';
 const OFFLINE_PAGE = '/offline.html';
 
 // Assets to pre-cache on install
@@ -72,13 +72,13 @@ self.addEventListener('fetch', event => {
         return;
     }
 
-    // API requests → Network-first, fallback to cache, then offline page
-    if (url.pathname.startsWith(API_PATH_PREFIX)) {
+    // HTML pages / Navigation / API requests → Network-first, fallback to cache
+    if (request.mode === 'navigate' || url.pathname === '/' || url.pathname.endsWith('.html') || url.pathname.startsWith(API_PATH_PREFIX)) {
         event.respondWith(networkFirstStrategy(request));
         return;
     }
 
-    // Static assets → Cache-first, fallback to network
+    // Static assets (CSS/JS/images) → Cache-first, fallback to network
     event.respondWith(cacheFirstStrategy(request));
 });
 
