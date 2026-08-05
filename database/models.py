@@ -213,6 +213,7 @@ class Examination(Base):
     term_id = Column(Integer, ForeignKey("terms.id", ondelete="CASCADE"), nullable=False)
     exam_date = Column(Date, nullable=False)
     max_score = Column(Integer, default=100)
+    is_active = Column(Boolean, default=True)
     
     academic_year = relationship("AcademicYear", back_populates="examinations")
     term = relationship("Term", back_populates="examinations")

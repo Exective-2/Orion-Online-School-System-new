@@ -3076,13 +3076,15 @@ def save_staff_attendance(data: dict, user=Depends(get_current_user)):
 def get_exams(user=Depends(get_current_user)):
     session = get_session()
     try:
-        exams = session.query(Examination).all()
+        exams = session.query(Examination).order_by(Examination.id.desc()).all()
         return [
             {
                 "id": e.id,
                 "name": e.name,
                 "term_name": e.term.name if e.term else "N/A",
-                "is_active": True
+                "academic_year_id": e.academic_year_id,
+                "term_id": e.term_id,
+                "is_active": getattr(e, "is_active", True) if getattr(e, "is_active", True) is not None else True
             } for e in exams
         ]
     finally:
@@ -3099,11 +3101,77 @@ def add_exam(data: dict, user=Depends(get_current_user)):
             term_id=t_id,
             name=data.get("name"),
             exam_date=datetime.date.today(),
-            max_score=100
+            max_score=100,
+            is_active=True
         )
         session.add(e)
         session.commit()
+        return {"status": "success", "id": e.id}
+    except Exception as e:
+        session.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        session.close()
+
+@app.put("/api/exams/{exam_id}")
+def update_exam(exam_id: int, data: dict, user=Depends(get_current_user)):
+    session = get_session()
+    try:
+        exam = session.query(Examination).filter(Examination.id == exam_id).first()
+        if not exam:
+            raise HTTPException(status_code=404, detail="Examination setup not found")
+        
+        if "name" in data and data["name"]:
+            exam.name = data["name"].strip()
+        if "is_active" in data:
+            exam.is_active = bool(data["is_active"])
+            
+        session.commit()
         return {"status": "success"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        session.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        session.close()
+
+@app.put("/api/exams/{exam_id}/toggle-status")
+def toggle_exam_status(exam_id: int, user=Depends(get_current_user)):
+    session = get_session()
+    try:
+        exam = session.query(Examination).filter(Examination.id == exam_id).first()
+        if not exam:
+            raise HTTPException(status_code=404, detail="Examination setup not found")
+        
+        exam.is_active = not getattr(exam, "is_active", True)
+        session.commit()
+        return {"status": "success", "is_active": exam.is_active}
+    except HTTPException:
+        raise
+    except Exception as e:
+        session.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        session.close()
+
+@app.delete("/api/exams/{exam_id}")
+def delete_exam(exam_id: int, user=Depends(get_current_user)):
+    role = user.get("role")
+    if role not in ["Admin/Headteacher", "Super Admin", "Head Teacher"] and not user.get("is_sysadmin"):
+        raise HTTPException(status_code=403, detail="Permission denied. Only Administrators can delete examination setups.")
+        
+    session = get_session()
+    try:
+        exam = session.query(Examination).filter(Examination.id == exam_id).first()
+        if not exam:
+            raise HTTPException(status_code=404, detail="Examination setup not found")
+        
+        session.delete(exam)
+        session.commit()
+        return {"status": "success"}
+    except HTTPException:
+        raise
     except Exception as e:
         session.rollback()
         raise HTTPException(status_code=500, detail=str(e))
@@ -3195,12 +3263,15 @@ def save_results(data: dict, user=Depends(get_current_user)):
             Result.examination_id == exam_id
         ).delete()
         
+        max_c = float(get_branch_setting("max_class_score", 30.0, session=session))
+        max_e = float(get_branch_setting("max_exam_score", 70.0, session=session))
+        
         for sc in scores:
             c_score = float(sc.get("class_score", 0.0))
             e_score = float(sc.get("exam_score", 0.0))
             
-            if c_score > 30.0 or e_score > 70.0:
-                raise HTTPException(status_code=400, detail="Class score cannot exceed 30 and Exam score cannot exceed 70")
+            if c_score > max_c or e_score > max_e:
+                raise HTTPException(status_code=400, detail=f"Class score cannot exceed {max_c:g} and Exam score cannot exceed {max_e:g}")
                 
             t_score = c_score + e_score
             
@@ -5338,7 +5409,9 @@ def get_school_profile(request: Request, user=Depends(get_current_user)):
             "headteacher_signature": final_sig,
             "curriculum": get_branch_setting("curriculum", "GES"),
             "currency": get_branch_setting("currency", "GHS"),
-            "theme": get_branch_setting("theme", "dark")
+            "theme": get_branch_setting("theme", "dark"),
+            "max_class_score": float(get_branch_setting("max_class_score", 30.0)),
+            "max_exam_score": float(get_branch_setting("max_exam_score", 70.0))
         }
 
     if b_filename:
@@ -5353,7 +5426,7 @@ def get_school_profile(request: Request, user=Depends(get_current_user)):
 
 @app.put("/api/settings/school-profile")
 def update_school_profile(data: dict, user=Depends(get_current_user)):
-    for key in ["school_motto", "school_tagline", "school_email", "school_phone", "school_address", "gps_address", "school_logo", "curriculum", "currency", "theme"]:
+    for key in ["school_motto", "school_tagline", "school_email", "school_phone", "school_address", "gps_address", "school_logo", "curriculum", "currency", "theme", "max_class_score", "max_exam_score"]:
         if key in data:
             set_branch_setting(key, data[key])
             
@@ -5660,6 +5733,8 @@ def sysadmin_create_branch(req: BranchCreate, user=Depends(get_current_user)):
                 set_branch_setting("curriculum", "GES", session=b_session)
                 set_branch_setting("currency", "GHS", session=b_session)
                 set_branch_setting("theme", "dark", session=b_session)
+                set_branch_setting("max_class_score", 30.0, session=b_session)
+                set_branch_setting("max_exam_score", 70.0, session=b_session)
 
                 b_session.commit()
             except Exception as b_err:

@@ -10,6 +10,24 @@ let enrollmentChart = null;
 let attendanceChart = null;
 let billingChart = null;
 
+let currentBranchMaxClassScore = 30.0;
+let currentBranchMaxExamScore = 70.0;
+
+function applyBranchScoreLimits(maxClass, maxExam) {
+    if (maxClass !== undefined && maxClass !== null) currentBranchMaxClassScore = parseFloat(maxClass) || 30.0;
+    if (maxExam !== undefined && maxExam !== null) currentBranchMaxExamScore = parseFloat(maxExam) || 70.0;
+    
+    const thClass = document.getElementById("th-class-score-hdr");
+    const thExam = document.getElementById("th-exam-score-hdr");
+    if (thClass) thClass.innerText = `Class Score (${currentBranchMaxClassScore.toFixed(0)}%)`;
+    if (thExam) thExam.innerText = `Exam Score (${currentBranchMaxExamScore.toFixed(0)}%)`;
+
+    const thParentClass = document.getElementById("th-parent-class-score-hdr");
+    const thParentExam = document.getElementById("th-parent-exam-score-hdr");
+    if (thParentClass) thParentClass.innerText = `Class Score (${currentBranchMaxClassScore.toFixed(0)}%)`;
+    if (thParentExam) thParentExam.innerText = `Exam Score (${currentBranchMaxExamScore.toFixed(0)}%)`;
+}
+
 // PWA + SSE globals
 let _orionSSE = null;          // OrionSSE instance
 let _deferredInstallPrompt = null; // PWA install prompt
@@ -216,6 +234,7 @@ function triggerAppSplash(onComplete) {
     apiFetch("/api/settings/school-profile")
         .then(profile => {
             if (profile) {
+                applyBranchScoreLimits(profile.max_class_score, profile.max_exam_score);
                 if (profile.school_name && splashTitle) {
                     splashTitle.innerText = profile.school_name.toUpperCase();
                 }
@@ -3297,20 +3316,35 @@ function loadExams() {
              selectReport.innerHTML = '<option value="">Select exam...</option>';
              
              if (exams.length === 0) {
-                  tbody.innerHTML = '<tr><td colspan="4">No exams configured.</td></tr>';
+                  tbody.innerHTML = '<tr><td colspan="5" class="text-center">No exams configured.</td></tr>';
                   return;
              }
              
              exams.forEach(e => {
+                 const statusBtn = e.is_active 
+                     ? `<button class="btn btn-xs btn-success" onclick="toggleExamStatus(${e.id})" title="Click to set Inactive"><i class="fa-solid fa-circle-check"></i> Active</button>`
+                     : `<button class="btn btn-xs btn-secondary" onclick="toggleExamStatus(${e.id})" style="opacity:0.75;" title="Click to set Active"><i class="fa-solid fa-circle-xmark"></i> Inactive</button>`;
+
+                 const safeName = (e.name || "").replace(/'/g, "\\'").replace(/"/g, "&quot;");
+                 const actions = `
+                     <div class="btn-group" style="display:flex; justify-content:center; gap:6px;">
+                         <button class="btn btn-xs btn-outline-primary" onclick="openEditExamModal(${e.id}, '${safeName}', ${e.is_active})"><i class="fa-solid fa-pen-to-square"></i> Edit</button>
+                         <button class="btn btn-xs btn-outline-danger" onclick="deleteExam(${e.id}, '${safeName}')"><i class="fa-solid fa-trash"></i> Delete</button>
+                     </div>
+                 `;
+
                  tbody.innerHTML += `
                      <tr>
                          <td><strong>${e.id}</strong></td>
-                         <td>${e.name}</td>
+                         <td><strong>${escapeHtml(e.name)}</strong></td>
                          <td>${e.term_name}</td>
-                         <td><span class="badge badge-branch">${e.is_active ? 'Active' : 'Completed'}</span></td>
+                         <td>${statusBtn}</td>
+                         <td style="text-align:center;">${actions}</td>
                      </tr>`;
-                 select.innerHTML += `<option value="${e.id}">${e.name}</option>`;
-                 selectReport.innerHTML += `<option value="${e.id}">${e.name}</option>`;
+                     
+                 const label = e.is_active ? e.name : `${e.name} (Inactive)`;
+                 select.innerHTML += `<option value="${e.id}">${label}</option>`;
+                 selectReport.innerHTML += `<option value="${e.id}">${label}</option>`;
              });
         });
         
@@ -3335,21 +3369,69 @@ function loadExams() {
         
 }
 
-document.getElementById("btn-add-exam-trigger").addEventListener("click", () => {
+document.getElementById("btn-add-exam-trigger")?.addEventListener("click", () => {
      document.getElementById("modal-add-exam").classList.add("show");
 });
 
-document.getElementById("form-add-exam").addEventListener("submit", (e) => {
+document.getElementById("form-add-exam")?.addEventListener("submit", (e) => {
      e.preventDefault();
      const name = document.getElementById("exam-title-input").value;
      apiFetch("/api/exams", { method: "POST", body: { name: name } })
          .then(() => {
               showToast("New examination setup created", "success");
               document.getElementById("modal-add-exam").classList.remove("show");
+              document.getElementById("exam-title-input").value = "";
               loadExams();
          })
          .catch(err => showToast(err.message, "error"));
 });
+
+function openEditExamModal(id, name, isActive) {
+    document.getElementById("edit-exam-id").value = id;
+    document.getElementById("edit-exam-title-input").value = name;
+    document.getElementById("edit-exam-active-checkbox").checked = !!isActive;
+    document.getElementById("modal-edit-exam").classList.add("show");
+}
+
+document.getElementById("form-edit-exam")?.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const id = document.getElementById("edit-exam-id").value;
+    const name = document.getElementById("edit-exam-title-input").value;
+    const isActive = document.getElementById("edit-exam-active-checkbox").checked;
+    
+    apiFetch(`/api/exams/${id}`, {
+        method: "PUT",
+        body: { name: name, is_active: isActive }
+    })
+    .then(() => {
+        showToast("Examination setup updated successfully", "success");
+        document.getElementById("modal-edit-exam").classList.remove("show");
+        loadExams();
+    })
+    .catch(err => showToast(err.message, "error"));
+});
+
+function toggleExamStatus(id) {
+    apiFetch(`/api/exams/${id}/toggle-status`, { method: "PUT" })
+        .then(res => {
+            showToast(`Exam status set to ${res.is_active ? 'Active' : 'Inactive'}`, "success");
+            loadExams();
+        })
+        .catch(err => showToast(err.message, "error"));
+}
+
+function deleteExam(id, name) {
+    if (!confirm(`Are you sure you want to delete examination "${name}"?\nAssociated student grades recorded under this exam period will also be deleted.`)) {
+        return;
+    }
+    
+    apiFetch(`/api/exams/${id}`, { method: "DELETE" })
+        .then(() => {
+            showToast("Examination setup deleted successfully", "success");
+            loadExams();
+        })
+        .catch(err => showToast(err.message, "error"));
+}
 
 document.getElementById("btn-load-results").addEventListener("click", () => {
     const eid = document.getElementById("results-exam-select").value;
@@ -3382,8 +3464,8 @@ document.getElementById("btn-load-results").addEventListener("click", () => {
                           <tr data-id="${r.student_id}">
                               <td><strong>${r.student_id}</strong></td>
                               <td>${r.student_name}</td>
-                              <td><input type="number" step="0.1" min="0" max="30" class="form-control res-class-score" value="${r.class_score}" style="width:100px;" placeholder="Max 30"></td>
-                              <td><input type="number" step="0.1" min="0" max="70" class="form-control res-exam-score" value="${r.exam_score}" style="width:100px;" placeholder="Max 70"></td>
+                              <td><input type="number" step="0.1" min="0" max="${currentBranchMaxClassScore}" class="form-control res-class-score" value="${r.class_score}" style="width:100px;" placeholder="Max ${currentBranchMaxClassScore}"></td>
+                              <td><input type="number" step="0.1" min="0" max="${currentBranchMaxExamScore}" class="form-control res-exam-score" value="${r.exam_score}" style="width:100px;" placeholder="Max ${currentBranchMaxExamScore}"></td>
                               <td class="res-total-score-val" style="font-weight: 600; vertical-align: middle;">${totalScore.toFixed(1)}</td>
                               <td style="vertical-align: middle;"><span class="badge badge-branch res-grade-val">${gradeLetter}</span></td>
                               <td><input type="text" class="form-control res-remarks" value="${r.remarks || ""}"></td>
@@ -3405,17 +3487,17 @@ document.getElementById("results-table").addEventListener("input", (e) => {
         let classVal = parseFloat(classInput.value) || 0.0;
         let examVal = parseFloat(examInput.value) || 0.0;
         
-        if (classVal > 30.0) {
-            classInput.value = 30;
-            classVal = 30.0;
+        if (classVal > currentBranchMaxClassScore) {
+            classInput.value = currentBranchMaxClassScore;
+            classVal = currentBranchMaxClassScore;
         } else if (classVal < 0.0) {
             classInput.value = 0;
             classVal = 0.0;
         }
         
-        if (examVal > 70.0) {
-            examInput.value = 70;
-            examVal = 70.0;
+        if (examVal > currentBranchMaxExamScore) {
+            examInput.value = currentBranchMaxExamScore;
+            examVal = currentBranchMaxExamScore;
         } else if (examVal < 0.0) {
             examInput.value = 0;
             examVal = 0.0;
@@ -3455,12 +3537,12 @@ document.getElementById("results-sheet-form").addEventListener("submit", (e) => 
          const examScore = parseFloat(row.querySelector(".res-exam-score").value) || 0.0;
          const remarks = row.querySelector(".res-remarks").value;
          
-         if (classScore > 30.0) {
-              showToast(`Student ${studentId}: Class Score cannot exceed 30`, "error");
+         if (classScore > currentBranchMaxClassScore) {
+              showToast(`Student ${studentId}: Class Score cannot exceed ${currentBranchMaxClassScore}`, "error");
               hasValidationError = true;
          }
-         if (examScore > 70.0) {
-              showToast(`Student ${studentId}: Exam Score cannot exceed 70`, "error");
+         if (examScore > currentBranchMaxExamScore) {
+              showToast(`Student ${studentId}: Exam Score cannot exceed ${currentBranchMaxExamScore}`, "error");
               hasValidationError = true;
          }
          
@@ -3823,8 +3905,8 @@ function loadResultApprovalSheet(customCid = null, customYid = null, customTid =
                                         <tr>
                                             <th style="width:30px;">#</th>
                                             <th>Subject Name</th>
-                                            <th>Class Score (30)</th>
-                                            <th>Exam Score (70)</th>
+                                            <th>Class Score (${currentBranchMaxClassScore.toFixed(0)})</th>
+                                            <th>Exam Score (${currentBranchMaxExamScore.toFixed(0)})</th>
                                             <th>Total Score (100)</th>
                                             <th>Grade</th>
                                             <th>Subject Rank</th>
@@ -5628,9 +5710,16 @@ function loadSettings() {
     // Profiles details
     apiFetch("/api/settings/school-profile")
         .then(profile => {
+             applyBranchScoreLimits(profile.max_class_score, profile.max_exam_score);
              document.getElementById("set-school-name").value = profile.school_name || "";
              if (document.getElementById("set-gps-address")) {
                  document.getElementById("set-gps-address").value = profile.gps_address || "";
+             }
+             if (document.getElementById("set-max-class-score")) {
+                 document.getElementById("set-max-class-score").value = profile.max_class_score !== undefined ? profile.max_class_score : 30;
+             }
+             if (document.getElementById("set-max-exam-score")) {
+                 document.getElementById("set-max-exam-score").value = profile.max_exam_score !== undefined ? profile.max_exam_score : 70;
              }
              document.getElementById("set-school-motto").value = profile.school_motto || "";
              document.getElementById("set-school-tagline").value = profile.school_tagline || "ORION";
@@ -5860,6 +5949,7 @@ function loadAppBranding() {
     apiFetch("/api/settings/school-profile")
         .then(profile => {
             if (profile) {
+                applyBranchScoreLimits(profile.max_class_score, profile.max_exam_score);
                 const logoUrl = profile.school_logo || "";
                 updateHeaderBranding(profile.school_name || currentBranchName, logoUrl);
             }
@@ -5913,16 +6003,31 @@ document.getElementById("form-settings-profile")?.addEventListener("submit", asy
             }
         }
 
+        const maxClassVal = parseFloat(document.getElementById("set-max-class-score")?.value) || 30.0;
+        const maxExamVal = parseFloat(document.getElementById("set-max-exam-score")?.value) || 70.0;
+
+        if (maxClassVal < 0 || maxExamVal < 0 || (maxClassVal + maxExamVal !== 100)) {
+            showToast("Max Class Score and Max Exam Score must sum to 100%", "error");
+            if (submitBtn) {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = originalBtnHtml || `<i class="fa-solid fa-floppy-disk"></i> Save Profile Details`;
+            }
+            return;
+        }
+
         const payload = {
             school_motto: document.getElementById("set-school-motto").value,
             school_tagline: document.getElementById("set-school-tagline").value,
             school_phone: document.getElementById("set-school-phone").value,
             school_email: document.getElementById("set-school-email").value,
             school_address: document.getElementById("set-school-address").value,
-            gps_address: document.getElementById("set-gps-address")?.value || ""
+            gps_address: document.getElementById("set-gps-address")?.value || "",
+            max_class_score: maxClassVal,
+            max_exam_score: maxExamVal
         };
 
         await apiFetch("/api/settings/school-profile", { method: "PUT", body: payload });
+        applyBranchScoreLimits(maxClassVal, maxExamVal);
         
         showToast("School configurations profile saved successfully!", "success");
         updateHeaderBranding(payload.school_name, logoUrl || undefined);

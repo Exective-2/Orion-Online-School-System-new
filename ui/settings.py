@@ -82,6 +82,8 @@ class SettingsPanel(QWidget):
         self.phone_input = QLineEdit()
         self.address_input = QLineEdit()
         self.gps_address_input = QLineEdit()
+        self.max_class_score_input = QLineEdit("30")
+        self.max_exam_score_input = QLineEdit("70")
         
         self.logo_path_label = QLabel("No logo uploaded")
         self.logo_path_label.setStyleSheet("color: #64748b; font-style: italic;")
@@ -99,6 +101,8 @@ class SettingsPanel(QWidget):
         form_layout.addRow("School Contact Phone:", self.phone_input)
         form_layout.addRow("School Physical Address:", self.address_input)
         form_layout.addRow("School GPS Address:", self.gps_address_input)
+        form_layout.addRow("Max Class Score Weight (%):", self.max_class_score_input)
+        form_layout.addRow("Max Exam Score Weight (%):", self.max_exam_score_input)
         form_layout.addRow("School Logo Image:", logo_layout)
         
         tab_layout.addWidget(form_frame)
@@ -119,6 +123,8 @@ class SettingsPanel(QWidget):
         self.phone_input.setText(get_branch_setting("school_phone", ""))
         self.address_input.setText(get_branch_setting("school_address", ""))
         self.gps_address_input.setText(get_branch_setting("gps_address", ""))
+        self.max_class_score_input.setText(str(get_branch_setting("max_class_score", 30.0)))
+        self.max_exam_score_input.setText(str(get_branch_setting("max_exam_score", 70.0)))
         
         logo_path = get_branch_setting("school_logo", "")
         if logo_path:
@@ -143,6 +149,18 @@ class SettingsPanel(QWidget):
         set_branch_setting("school_phone", self.phone_input.text().strip())
         set_branch_setting("school_address", self.address_input.text().strip())
         set_branch_setting("gps_address", self.gps_address_input.text().strip())
+        
+        try:
+            c_score = float(self.max_class_score_input.text().strip() or "30")
+            e_score = float(self.max_exam_score_input.text().strip() or "70")
+            if c_score < 0 or e_score < 0 or (c_score + e_score != 100):
+                QMessageBox.warning(self, "Validation Error", "Max Class Score and Max Exam Score must sum to 100%.")
+                return
+            set_branch_setting("max_class_score", c_score)
+            set_branch_setting("max_exam_score", e_score)
+        except ValueError:
+            QMessageBox.warning(self, "Validation Error", "Please enter valid numbers for class score and exam score weights.")
+            return
         
         logo_path = ""
         if hasattr(self, 'selected_logo_path') and self.selected_logo_path:

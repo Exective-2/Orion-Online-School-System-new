@@ -1146,10 +1146,11 @@
                                                 <th>Exam Title</th>
                                                 <th>Term Period</th>
                                                 <th>Active Status</th>
+                                                <th style="text-align:center;">Actions</th>
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            <tr><td colspan="4">Loading exams...</td></tr>
+                                            <tr><td colspan="5">Loading exams...</td></tr>
                                         </tbody>
                                     </table>
                                 </div>
@@ -1182,8 +1183,8 @@
                                                 <tr>
                                                     <th>Student ID</th>
                                                     <th>Student Name</th>
-                                                    <th>Class Score (30%)</th>
-                                                    <th>Exam Score (70%)</th>
+                                                    <th id="th-class-score-hdr">Class Score (30%)</th>
+                                                    <th id="th-exam-score-hdr">Exam Score (70%)</th>
                                                     <th>Total (100)</th>
                                                     <th>Grade</th>
                                                     <th>Remarks</th>
@@ -2617,6 +2618,16 @@
                                             <div class="form-group">
                                                 <label>GPS Address</label>
                                                 <input type="text" id="set-gps-address" class="form-control" placeholder="e.g. AK-039-5028">
+                                            </div>
+                                            <div class="form-group">
+                                                <label>Max Class Score Weight (%)</label>
+                                                <input type="number" id="set-max-class-score" class="form-control" min="0" max="100" step="1" value="30" placeholder="e.g. 30">
+                                                <small style="font-size:11px; color:var(--text-muted);">Continuous Assessment / Homework / Tests ratio</small>
+                                            </div>
+                                            <div class="form-group">
+                                                <label>Max Exam Score Weight (%)</label>
+                                                <input type="number" id="set-max-exam-score" class="form-control" min="0" max="100" step="1" value="70" placeholder="e.g. 70">
+                                                <small style="font-size:11px; color:var(--text-muted);">Terminal Examination ratio</small>
                                             </div>
 
                                             <div class="form-group">
@@ -4195,6 +4206,35 @@
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary btn-modal-cancel">Cancel</button>
                     <button type="submit" class="btn btn-primary">Create Exam</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal: Edit Exam -->
+    <div class="modal" id="modal-edit-exam">
+        <div class="modal-dialog glass-panel">
+            <div class="modal-header">
+                <h2>Edit Examination Setup</h2>
+                <button class="modal-close">&times;</button>
+            </div>
+            <form id="form-edit-exam">
+                <input type="hidden" id="edit-exam-id">
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label>Exam Period Title</label>
+                        <input type="text" id="edit-exam-title-input" class="form-control" placeholder="e.g. End of Term 1 Examinations" required>
+                    </div>
+                    <div class="form-group" style="margin-top:15px;">
+                        <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+                            <input type="checkbox" id="edit-exam-active-checkbox" style="width:18px; height:18px;">
+                            <span>Active Status (Active exams are available for score entry)</span>
+                        </label>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary btn-modal-cancel">Cancel</button>
+                    <button type="submit" class="btn btn-primary"><i class="fa-solid fa-floppy-disk"></i> Save Changes</button>
                 </div>
             </form>
         </div>

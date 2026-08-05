@@ -839,7 +839,9 @@ def seed_fresh_branch(branch_db_path, branch_name: str = "New Branch", branch_in
             "headteacher_signature": "",
             "curriculum": "GES",
             "currency": "GHS",
-            "theme": "dark"
+            "theme": "dark",
+            "max_class_score": 30.0,
+            "max_exam_score": 70.0
         }
         for k, v in default_settings.items():
             session.add(SystemSetting(key=k, value=str(v) if v is not None else ""))

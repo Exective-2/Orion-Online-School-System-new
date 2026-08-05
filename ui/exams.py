@@ -61,10 +61,13 @@ class ExamsPanel(QWidget):
         layout.addWidget(top_bar)
         
         # Grid table
+        from utils.branch_config import get_branch_setting
+        max_c_hdr = int(float(get_branch_setting("max_class_score", 30.0)))
+        max_e_hdr = int(float(get_branch_setting("max_exam_score", 70.0)))
         self.table = QTableWidget()
         self.table.setColumnCount(7)
         self.table.setHorizontalHeaderLabels([
-            "Student ID", "Student Name", "Class Score (30%)", "Exam Score (70%)", "Total (100)", "Grade", "Remarks"
+            "Student ID", "Student Name", f"Class Score ({max_c_hdr}%)", f"Exam Score ({max_e_hdr}%)", "Total (100)", "Grade", "Remarks"
         ])
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
@@ -116,15 +119,16 @@ class ExamsPanel(QWidget):
     def load_combos(self):
         session = get_session()
         try:
-            # Exams
-            exams = session.query(Examination).all()
+            exams = session.query(Examination).order_by(Examination.id.desc()).all()
             self.exam_combo.clear()
             self.an_exam_combo.clear()
             self.sum_exam_combo.clear()
             for e in exams:
-                self.exam_combo.addItem(e.name, e.id)
-                self.an_exam_combo.addItem(e.name, e.id)
-                self.sum_exam_combo.addItem(e.name, e.id)
+                is_act = getattr(e, 'is_active', True)
+                lbl = e.name if is_act or is_act is None else f"{e.name} (Inactive)"
+                self.exam_combo.addItem(lbl, e.id)
+                self.an_exam_combo.addItem(lbl, e.id)
+                self.sum_exam_combo.addItem(lbl, e.id)
                 
             # Classes
             classes = session.query(Class).all()
@@ -372,6 +376,12 @@ class ExamsPanel(QWidget):
             QMessageBox.warning(self, "Selection Required", "Please select examination, class, and subject.")
             return
             
+        from utils.branch_config import get_branch_setting
+        max_c_hdr = int(float(get_branch_setting("max_class_score", 30.0)))
+        max_e_hdr = int(float(get_branch_setting("max_exam_score", 70.0)))
+        self.table.setHorizontalHeaderLabels([
+            "Student ID", "Student Name", f"Class Score ({max_c_hdr}%)", f"Exam Score ({max_e_hdr}%)", "Total (100)", "Grade", "Remarks"
+        ])
         self.table.setSortingEnabled(False)
         self.updating_table = True
         self.table.setRowCount(0)
@@ -445,15 +455,19 @@ class ExamsPanel(QWidget):
             c_val = float(self.table.item(row, 2).text().strip() or "0.0")
             e_val = float(self.table.item(row, 3).text().strip() or "0.0")
             
+            from utils.branch_config import get_branch_setting
+            max_c = float(get_branch_setting("max_class_score", 30.0))
+            max_e = float(get_branch_setting("max_exam_score", 70.0))
+
             # Constrain inputs
-            if c_val < 0 or c_val > 30:
-                QMessageBox.warning(self, "Invalid Value", "Class score must be between 0 and 30.")
-                c_val = min(max(c_val, 0.0), 30.0)
+            if c_val < 0 or c_val > max_c:
+                QMessageBox.warning(self, "Invalid Value", f"Class score must be between 0 and {max_c:g}.")
+                c_val = min(max(c_val, 0.0), max_c)
                 self.table.item(row, 2).setText(str(c_val))
                 
-            if e_val < 0 or e_val > 70:
-                QMessageBox.warning(self, "Invalid Value", "Exam score must be between 0 and 70.")
-                e_val = min(max(e_val, 0.0), 70.0)
+            if e_val < 0 or e_val > max_e:
+                QMessageBox.warning(self, "Invalid Value", f"Exam score must be between 0 and {max_e:g}.")
+                e_val = min(max(e_val, 0.0), max_e)
                 self.table.item(row, 3).setText(str(e_val))
                 
             total = c_val + e_val

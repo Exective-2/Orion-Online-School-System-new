@@ -686,12 +686,15 @@ def generate_report_card(student_id: str, examination_id: int, output_path: str 
         story.append(t_meta)
         story.append(Spacer(1, 15))
         
+        max_c = int(float(get_branch_setting("max_class_score", 30.0, session=session)))
+        max_e = int(float(get_branch_setting("max_exam_score", 70.0, session=session)))
+        
         # Results Table Header
         results_header = [
             Paragraph("<b>Subject Code</b>", th_style),
             Paragraph("<b>Subject Title</b>", th_style),
-            Paragraph("<b>Class Score (30)</b>", th_style),
-            Paragraph("<b>Exam Score (70)</b>", th_style),
+            Paragraph(f"<b>Class Score ({max_c})</b>", th_style),
+            Paragraph(f"<b>Exam Score ({max_e})</b>", th_style),
             Paragraph("<b>Total (100)</b>", th_style),
             Paragraph("<b>Grade</b>", th_style),
             Paragraph("<b>Remarks</b>", th_style)
@@ -1021,12 +1024,15 @@ def generate_class_report_cards(class_id: int, examination_id: int, student_ids:
             story.append(t_meta)
             story.append(Spacer(1, 15))
             
+            max_c = int(float(get_branch_setting("max_class_score", 30.0, session=session)))
+            max_e = int(float(get_branch_setting("max_exam_score", 70.0, session=session)))
+            
             # Results Table Header
             results_header = [
                 Paragraph("<b>Subject Code</b>", th_style),
                 Paragraph("<b>Subject Title</b>", th_style),
-                Paragraph("<b>Class Score (30)</b>", th_style),
-                Paragraph("<b>Exam Score (70)</b>", th_style),
+                Paragraph(f"<b>Class Score ({max_c})</b>", th_style),
+                Paragraph(f"<b>Exam Score ({max_e})</b>", th_style),
                 Paragraph("<b>Total (100)</b>", th_style),
                 Paragraph("<b>Grade</b>", th_style),
                 Paragraph("<b>Remarks</b>", th_style)
