@@ -158,7 +158,9 @@ def init_db(force: bool = False):
             "ALTER TABLE expenses ADD COLUMN IF NOT EXISTS transaction_type VARCHAR(20) DEFAULT 'Expense';",
             "ALTER TABLE expenses ADD COLUMN IF NOT EXISTS payment_method VARCHAR(50) DEFAULT 'Cash';",
             "ALTER TABLE expenses ADD COLUMN IF NOT EXISTS reference_no VARCHAR(100);",
-            "ALTER TABLE examinations ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE;"
+            "ALTER TABLE examinations ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE;",
+            "ALTER TABLE students ALTER COLUMN photo_path TYPE TEXT;",
+            "ALTER TABLE staff ALTER COLUMN photo_path TYPE TEXT;"
         ]:
             try:
                 trans = conn.begin()

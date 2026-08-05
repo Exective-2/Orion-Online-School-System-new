@@ -115,7 +115,7 @@ class Student(Base):
     class_id = Column(Integer, ForeignKey("classes.id"), nullable=True)
     parent_id = Column(Integer, ForeignKey("parents.id"), nullable=True)
     status = Column(String(20), default="Active")  # "Active", "Promoted", "Transferred", "Withdrawn", "Alumnus"
-    photo_path = Column(String(255), nullable=True)
+    photo_path = Column(Text, nullable=True)
     medical_info = Column(Text, nullable=True)
     emergency_contact_name = Column(String(100), nullable=True)
     emergency_contact_phone = Column(String(20), nullable=True)
@@ -142,7 +142,7 @@ class Staff(Base):
     hire_date = Column(Date, default=datetime.date.today)
     status = Column(String(20), default="Active")  # "Active", "Resigned", "Suspended"
     address = Column(String(200), nullable=True)
-    photo_path = Column(String(255), nullable=True)
+    photo_path = Column(Text, nullable=True)
     signature_path = Column(String(255), nullable=True)
     qualification = Column(String(100), nullable=True)
     base_salary = Column(Float, default=0.0)
