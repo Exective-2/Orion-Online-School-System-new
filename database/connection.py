@@ -157,7 +157,8 @@ def init_db(force: bool = False):
             "ALTER TABLE fees ADD COLUMN is_system_fee INTEGER DEFAULT 0;",
             "ALTER TABLE expenses ADD COLUMN transaction_type VARCHAR(20) DEFAULT 'Expense';",
             "ALTER TABLE expenses ADD COLUMN payment_method VARCHAR(50) DEFAULT 'Cash';",
-            "ALTER TABLE expenses ADD COLUMN reference_no VARCHAR(100);"
+            "ALTER TABLE expenses ADD COLUMN reference_no VARCHAR(100);",
+            "ALTER TABLE examinations ADD COLUMN is_active BOOLEAN DEFAULT 1;"
         ]:
             try:
                 conn.execute(text(col_def))
