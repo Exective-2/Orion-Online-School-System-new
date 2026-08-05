@@ -144,26 +144,42 @@ def init_db(force: bool = False):
     
     # Schema migration to add missing columns in older SQLite/Postgres setups
     from sqlalchemy import text
-    with engine.begin() as conn:
+    with engine.connect() as conn:
         for col_def in [
-            "ALTER TABLE staff ADD COLUMN base_salary FLOAT DEFAULT 0.0;",
-            "ALTER TABLE staff ADD COLUMN signature_path VARCHAR(255);",
-            "ALTER TABLE student_report_remarks ADD COLUMN student_interest VARCHAR(250);",
-            "ALTER TABLE student_report_remarks ADD COLUMN attitude_score VARCHAR(100);",
-            "ALTER TABLE student_report_remarks ADD COLUMN overall_score FLOAT DEFAULT 0.0;",
-            "ALTER TABLE student_report_remarks ADD COLUMN average_score FLOAT DEFAULT 0.0;",
-            "ALTER TABLE student_report_remarks ADD COLUMN class_rank INTEGER;",
-            "ALTER TABLE student_report_remarks ADD COLUMN total_subjects INTEGER DEFAULT 0;",
-            "ALTER TABLE fees ADD COLUMN is_system_fee INTEGER DEFAULT 0;",
-            "ALTER TABLE expenses ADD COLUMN transaction_type VARCHAR(20) DEFAULT 'Expense';",
-            "ALTER TABLE expenses ADD COLUMN payment_method VARCHAR(50) DEFAULT 'Cash';",
-            "ALTER TABLE expenses ADD COLUMN reference_no VARCHAR(100);",
-            "ALTER TABLE examinations ADD COLUMN is_active BOOLEAN DEFAULT 1;"
+            "ALTER TABLE staff ADD COLUMN IF NOT EXISTS base_salary FLOAT DEFAULT 0.0;",
+            "ALTER TABLE staff ADD COLUMN IF NOT EXISTS signature_path VARCHAR(255);",
+            "ALTER TABLE student_report_remarks ADD COLUMN IF NOT EXISTS student_interest VARCHAR(250);",
+            "ALTER TABLE student_report_remarks ADD COLUMN IF NOT EXISTS attitude_score VARCHAR(100);",
+            "ALTER TABLE student_report_remarks ADD COLUMN IF NOT EXISTS overall_score FLOAT DEFAULT 0.0;",
+            "ALTER TABLE student_report_remarks ADD COLUMN IF NOT EXISTS average_score FLOAT DEFAULT 0.0;",
+            "ALTER TABLE student_report_remarks ADD COLUMN IF NOT EXISTS class_rank INTEGER;",
+            "ALTER TABLE student_report_remarks ADD COLUMN IF NOT EXISTS total_subjects INTEGER DEFAULT 0;",
+            "ALTER TABLE fees ADD COLUMN IF NOT EXISTS is_system_fee INTEGER DEFAULT 0;",
+            "ALTER TABLE expenses ADD COLUMN IF NOT EXISTS transaction_type VARCHAR(20) DEFAULT 'Expense';",
+            "ALTER TABLE expenses ADD COLUMN IF NOT EXISTS payment_method VARCHAR(50) DEFAULT 'Cash';",
+            "ALTER TABLE expenses ADD COLUMN IF NOT EXISTS reference_no VARCHAR(100);",
+            "ALTER TABLE examinations ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE;"
         ]:
             try:
+                trans = conn.begin()
                 conn.execute(text(col_def))
+                trans.commit()
             except Exception:
-                pass
+                try:
+                    trans.rollback()
+                except Exception:
+                    pass
+                # Fallback for SQLite (which does not support IF NOT EXISTS in ALTER TABLE ADD COLUMN)
+                try:
+                    alt_sqlite = col_def.replace(" IF NOT EXISTS", "").replace("DEFAULT TRUE", "DEFAULT 1")
+                    trans2 = conn.begin()
+                    conn.execute(text(alt_sqlite))
+                    trans2.commit()
+                except Exception:
+                    try:
+                        trans2.rollback()
+                    except Exception:
+                        pass
     _initialized_db_urls.add(db_url)
 
 def reset_engine():
