@@ -662,7 +662,7 @@ class CreateFeeDialog(QDialog):
         self.amount_input = QLineEdit()
         
         self.level_combo = QComboBox()
-        self.level_combo.addItems(["All", "Kindergarten", "Primary", "JHS"])
+        self.level_combo.addItems(["All", "Pre-School", "Kindergarten", "Primary", "JHS", "SHS"])
         
         form_layout.addRow("Fee Name:", self.name_input)
         form_layout.addRow("Amount (GHS):", self.amount_input)

@@ -819,7 +819,7 @@ class AddClassDialog(QDialog):
         self.name_input = QLineEdit()
         self.name_input.setPlaceholderText("e.g. JHS 1 A")
         self.level_combo = QComboBox()
-        self.level_combo.addItems(["Kindergarten", "Primary", "JHS"])
+        self.level_combo.addItems(["Pre-School", "Kindergarten", "Primary", "JHS", "SHS"])
         self.stream_input = QLineEdit()
         self.stream_input.setPlaceholderText("e.g. A, B, Gold, Silver")
         
@@ -876,7 +876,7 @@ class AddSubjectDialog(QDialog):
         self.code_input = QLineEdit()
         self.code_input.setPlaceholderText("e.g. SCI-JHS1")
         self.level_combo = QComboBox()
-        self.level_combo.addItems(["Kindergarten", "Primary", "JHS"])
+        self.level_combo.addItems(["Pre-School", "Kindergarten", "Primary", "JHS", "SHS"])
         
         form_layout.addRow("Subject Name:", self.name_input)
         form_layout.addRow("Subject Code:", self.code_input)

@@ -215,6 +215,12 @@ class StudentsPanel(QWidget):
 
     def get_next_class_level(self, current_name: str) -> str | None:
         mapping = {
+            "Creche": "Nursery 1",
+            "Nursery 1": "Nursery 2",
+            "Nursery 2": "Kindergarten 1",
+            "Pre-School 1": "Pre-School 2",
+            "Pre-School 2": "Kindergarten 1",
+            "Pre-School": "Kindergarten 1",
             "Kindergarten 1": "Kindergarten 2",
             "Kindergarten 2": "Primary 1",
             "Primary 1": "Primary 2",
