@@ -1,5 +1,7 @@
 import datetime
 import os
+import base64
+import tempfile
 from pathlib import Path
 from reportlab.lib.pagesizes import letter, A4
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak
@@ -25,31 +27,117 @@ def _get_pdf_dir() -> Path:
 # Module-level alias kept for backward compatibility (resolves lazily via _get_pdf_dir())
 # Do NOT call PDF_OUTPUT_DIR directly — use _get_pdf_dir() inside functions.
 
+# Keeps track of temp files created for Base64 images so they can be cleaned up
+_temp_image_files: list = []
+
+def _resolve_image_path(path_or_uri: str, base_dir: str = None) -> str:
+    """
+    Resolve a logo/signature path to an actual on-disk file path that ReportLab can open.
+
+    Handles three cases:
+    1. Absolute path already on disk → returned as-is.
+    2. Relative path (e.g. 'uploads/branch_1/logo.png') → resolved against web/ and project root.
+    3. Base64 data URI ('data:image/...;base64,...') → decoded to a NamedTemporaryFile and the
+       temp path is returned.  The temp file is registered for later clean-up.
+
+    Returns an empty string if the image cannot be found/decoded.
+    """
+    if not path_or_uri:
+        return ""
+
+    val = path_or_uri.strip()
+
+    # Case 3: Base64 data URI
+    if val.startswith("data:") and "base64," in val:
+        try:
+            header, encoded = val.split("base64,", 1)
+            # Determine extension from MIME type
+            mime = header.replace("data:", "").replace(";", "").strip()
+            ext_map = {
+                "image/jpeg": ".jpg",
+                "image/jpg": ".jpg",
+                "image/png": ".png",
+                "image/webp": ".webp",
+                "image/gif": ".gif",
+            }
+            ext = ext_map.get(mime, ".png")
+            pad = -len(encoded) % 4
+            img_bytes = base64.b64decode(encoded + "=" * pad)
+            tmp = tempfile.NamedTemporaryFile(delete=False, suffix=ext)
+            tmp.write(img_bytes)
+            tmp.flush()
+            tmp.close()
+            _temp_image_files.append(tmp.name)
+            return tmp.name
+        except Exception as ex:
+            print(f"[pdf_generator] Failed to decode Base64 image: {ex}")
+            return ""
+
+    # Case 1: Absolute path
+    if os.path.isabs(val):
+        return val if os.path.exists(val) else ""
+
+    # Case 2: Relative path — also fetch base64 fallback from DB if disk file is absent
+    clean = val.lstrip("/")
+    project_root = os.path.dirname(os.path.dirname(__file__))
+    candidates = [
+        os.path.join(project_root, "web", clean),
+        os.path.join(project_root, clean),
+    ]
+    if base_dir:
+        candidates.insert(0, os.path.join(base_dir, clean))
+    for c in candidates:
+        try:
+            if os.path.exists(c):
+                return c
+        except OSError:
+            pass
+
+    # Not found on disk — try the *_base64 sibling setting from the DB
+    # (school_logo → school_logo_base64, headteacher_signature → headteacher_signature_base64)
+    for setting_key in ("school_logo", "headteacher_signature"):
+        if setting_key.replace("_", "") in clean.replace("_", "").replace("-", "").replace("/", "").lower() or \
+           any(kw in clean.lower() for kw in ("logo", "sig", "signature")):
+            # Determine which key to use
+            if any(kw in clean.lower() for kw in ("sig", "signature")):
+                b64 = get_branch_setting("headteacher_signature_base64", "") or ""
+            else:
+                b64 = get_branch_setting("school_logo_base64", "") or ""
+            if b64 and "base64," in b64:
+                return _resolve_image_path(b64)
+            break
+
+    return ""
+
+def _cleanup_temp_images():
+    """Remove any temp files created by _resolve_image_path."""
+    global _temp_image_files
+    for f in _temp_image_files:
+        try:
+            os.unlink(f)
+        except Exception:
+            pass
+    _temp_image_files = []
+
+
 def draw_pdf_watermark_and_footer(canvas, doc):
     canvas.saveState()
     try:
         # 1. Logo Watermark (90% fade = 10% opacity)
-        logo_path = get_branch_setting("school_logo", "") or ""
-        if logo_path:
-            if not os.path.isabs(logo_path):
-                clean_logo = logo_path.lstrip("/")
-                logo_file = os.path.join(os.path.dirname(os.path.dirname(__file__)), "web", clean_logo)
-                if not os.path.exists(logo_file):
-                    logo_file = os.path.join(os.path.dirname(os.path.dirname(__file__)), clean_logo)
-            else:
-                logo_file = logo_path
-                
-            if logo_file and os.path.exists(logo_file):
-                try:
-                    canvas.setFillAlpha(0.1) # 90% fade (10% opacity)
-                    canvas.setStrokeAlpha(0.1)
-                    page_w, page_h = doc.pagesize
-                    w, h = 220, 220
-                    x = (page_w - w) / 2.0
-                    y = (page_h - h) / 2.0
-                    canvas.drawImage(logo_file, x, y, width=w, height=h, mask='auto', preserveAspectRatio=True)
-                except Exception as w_err:
-                    pass
+        # Resolve logo — supports relative paths, absolute paths, and Base64 data URIs
+        logo_path = get_branch_setting("school_logo_base64", "") or get_branch_setting("school_logo", "") or ""
+        logo_file = _resolve_image_path(logo_path)
+        if logo_file:
+            try:
+                canvas.setFillAlpha(0.1) # 90% fade (10% opacity)
+                canvas.setStrokeAlpha(0.1)
+                page_w, page_h = doc.pagesize
+                w, h = 220, 220
+                x = (page_w - w) / 2.0
+                y = (page_h - h) / 2.0
+                canvas.drawImage(logo_file, x, y, width=w, height=h, mask='auto', preserveAspectRatio=True)
+            except Exception as w_err:
+                pass
 
         # 2. Footer (School Motto at bottom center, font size 8px, 50% fade)
         school_motto = get_branch_setting("school_motto", "") or ""
@@ -67,18 +155,10 @@ def draw_pdf_watermark_and_footer(canvas, doc):
 def add_pdf_header(story, title_text=None):
     from reportlab.platypus import Image
     
-    logo_path = get_branch_setting("school_logo", "") or ""
-    if logo_path:
-        if os.path.isabs(logo_path):
-            logo_file = logo_path
-        else:
-            clean_logo = logo_path.lstrip("/")
-            logo_file = os.path.join(os.path.dirname(os.path.dirname(__file__)), "web", clean_logo)
-            if not os.path.exists(logo_file):
-                logo_file = os.path.join(os.path.dirname(os.path.dirname(__file__)), clean_logo)
-    else:
-        logo_file = ""
-    logo_exists = bool(logo_file and os.path.exists(logo_file))
+    # Prefer the base64 setting (always available on Vercel), fall back to path
+    logo_path = get_branch_setting("school_logo_base64", "") or get_branch_setting("school_logo", "") or ""
+    logo_file = _resolve_image_path(logo_path)
+    logo_exists = bool(logo_file)
     
     school_name = get_branch_setting("school_name", "Orion School System") or "Orion School System"
     school_motto = get_branch_setting("school_motto", "") or ""
@@ -232,10 +312,10 @@ def generate_student_id_card(student_id: str, output_path: str = None) -> tuple[
         
         photo_element = None
         if student.photo_path:
-            full_photo_path = Path(__file__).parent.parent / "web" / student.photo_path
-            if full_photo_path.exists():
+            resolved = _resolve_image_path(student.photo_path)
+            if resolved:
                 try:
-                    photo_element = Image(str(full_photo_path), width=photo_width, height=photo_height)
+                    photo_element = Image(resolved, width=photo_width, height=photo_height)
                 except Exception:
                     pass
                     
@@ -368,10 +448,10 @@ def generate_admission_form(student_id: str, output_path: str = None) -> tuple[b
         
         photo_element = None
         if student.photo_path:
-            full_photo_path = Path(__file__).parent.parent / "web" / student.photo_path
-            if full_photo_path.exists():
+            resolved = _resolve_image_path(student.photo_path)
+            if resolved:
                 try:
-                    photo_element = Image(str(full_photo_path), width=photo_width, height=photo_height)
+                    photo_element = Image(resolved, width=photo_width, height=photo_height)
                 except Exception:
                     pass
                     
@@ -647,10 +727,10 @@ def generate_report_card(student_id: str, examination_id: int, output_path: str 
         
         photo_element = None
         if student.photo_path:
-            full_photo_path = Path(__file__).parent.parent / "web" / student.photo_path
-            if full_photo_path.exists():
+            resolved = _resolve_image_path(student.photo_path)
+            if resolved:
                 try:
-                    photo_element = Image(str(full_photo_path), width=photo_width, height=photo_height)
+                    photo_element = Image(resolved, width=photo_width, height=photo_height)
                 except Exception:
                     pass
                     
@@ -871,18 +951,9 @@ def generate_report_card(student_id: str, examination_id: int, output_path: str 
         
         # Signature block
         story.append(Spacer(1, 15))
-        sig_path = get_branch_setting("headteacher_signature", "")
-        if sig_path:
-            if os.path.isabs(sig_path):
-                sig_file = sig_path
-            else:
-                clean_sig = sig_path.lstrip("/")
-                sig_file = os.path.join(os.path.dirname(os.path.dirname(__file__)), "web", clean_sig)
-                if not os.path.exists(sig_file):
-                    sig_file = os.path.join(os.path.dirname(os.path.dirname(__file__)), clean_sig)
-        else:
-            sig_file = ""
-        sig_exists = bool(sig_file and os.path.exists(sig_file))
+        sig_raw = get_branch_setting("headteacher_signature_base64", "") or get_branch_setting("headteacher_signature", "") or ""
+        sig_file = _resolve_image_path(sig_raw)
+        sig_exists = bool(sig_file)
 
         if sig_exists:
             try:
@@ -1391,18 +1462,9 @@ def generate_payslip_pdf(payslip, output_path: str = None):
         
         # Signatures
         story.append(Spacer(1, 20))
-        sig_path = get_branch_setting("headteacher_signature", "") or ""
-        sig_file = ""
-        if sig_path:
-            if os.path.isabs(sig_path):
-                sig_file = sig_path
-            else:
-                clean_sig = sig_path.lstrip("/")
-                sig_file = os.path.join(os.path.dirname(os.path.dirname(__file__)), "web", clean_sig)
-                if not os.path.exists(sig_file):
-                    sig_file = os.path.join(os.path.dirname(os.path.dirname(__file__)), clean_sig)
-                    
-        sig_exists = bool(sig_file and os.path.exists(sig_file))
+        sig_raw = get_branch_setting("headteacher_signature_base64", "") or get_branch_setting("headteacher_signature", "") or ""
+        sig_file = _resolve_image_path(sig_raw)
+        sig_exists = bool(sig_file)
         if sig_exists:
             try:
                 sig_img = Image(sig_file, width=90, height=30)

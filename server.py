@@ -7756,15 +7756,33 @@ def serve_uploads(file_path: str):
     import base64
     from fastapi.responses import Response
     
-    candidates = [
-        UPLOADS_DIR / file_path,
-        DATA_DIR / "uploads" / file_path,
-        APP_DIR / "web" / "uploads" / file_path,
-        web_dir / "uploads" / file_path
-    ]
-    for cand in candidates:
-        if cand.exists() and cand.is_file():
-            return FileResponse(str(cand))
+    # Direct Base64 data URI handling if file_path is or contains a Base64 data URI
+    if "base64," in file_path:
+        try:
+            raw_b64 = file_path
+            if "data:" in raw_b64:
+                raw_b64 = raw_b64[raw_b64.find("data:"):]
+            header, encoded = raw_b64.split("base64,", 1)
+            mime_type = header.replace("data:", "").replace(";", "") or "image/png"
+            pad = -len(encoded) % 4
+            img_bytes = base64.b64decode(encoded + ("=" * pad))
+            return Response(content=img_bytes, media_type=mime_type)
+        except Exception as ex:
+            print(f"Base64 image serve exception for inline data URI: {ex}")
+
+    if len(file_path) < 255:
+        candidates = [
+            UPLOADS_DIR / file_path,
+            DATA_DIR / "uploads" / file_path,
+            APP_DIR / "web" / "uploads" / file_path,
+            web_dir / "uploads" / file_path
+        ]
+        for cand in candidates:
+            try:
+                if cand.exists() and cand.is_file():
+                    return FileResponse(str(cand))
+            except OSError:
+                pass
             
     # Serverless Vercel fallback: Return Base64 decoded image from Database
     branch_id = 1
@@ -7799,10 +7817,11 @@ def serve_uploads(file_path: str):
         try:
             header, encoded = b64_data.split("base64,", 1)
             mime_type = header.replace("data:", "").replace(";", "") or "image/png"
-            img_bytes = base64.b64decode(encoded)
+            pad = -len(encoded) % 4
+            img_bytes = base64.b64decode(encoded + ("=" * pad))
             return Response(content=img_bytes, media_type=mime_type)
         except Exception as ex:
-            print(f"Base64 image serve exception for {file_path}: {ex}")
+            print(f"Base64 image serve exception for {file_path[:50]}: {ex}")
 
     raise HTTPException(status_code=404, detail="File not found")
 
