@@ -1,0 +1,40 @@
+# =============================================================================
+# Orion School Management System - Systemd Service File
+# Hostinger VPS / Ubuntu / Debian
+# Location on server: /etc/systemd/system/orion.service
+# =============================================================================
+
+[Unit]
+Description=Orion School Management System FastAPI Application
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/orion
+Environment="PATH=/var/www/orion/venv/bin:/usr/local/bin:/usr/bin"
+EnvironmentFile=/var/www/orion/.env
+ExecStart=/var/www/orion/venv/bin/gunicorn server:app \
+    --workers 4 \
+    --worker-class uvicorn.workers.UvicornWorker \
+    --bind 127.0.0.1:8000 \
+    --timeout 120 \
+    --graceful-timeout 30 \
+    --keep-alive 5 \
+    --access-logfile /var/log/orion/access.log \
+    --error-logfile /var/log/orion/error.log
+
+Restart=always
+RestartSec=5s
+KillSignal=SIGQUIT
+StandardOutput=journal
+StandardError=journal
+
+# Security Sandboxing
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=read-only
+
+[Install]
+WantedBy=multi-user.target

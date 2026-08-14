@@ -66,6 +66,43 @@ async def add_cache_control_header(request: Request, call_next):
         response.headers["Cache-Control"] = "public, max-age=86400"
     return response
 
+def get_portal_url(request: Optional[Request] = None) -> str:
+    """Resolve the public portal URL for SMS notifications and external links."""
+    from config import APP_URL
+    if APP_URL and len(APP_URL.strip()) > 0:
+        return APP_URL.strip().rstrip("/")
+    custom_url = get_branch_setting("school_portal_url", "")
+    if custom_url and len(custom_url.strip()) > 0:
+        return custom_url.strip().rstrip("/")
+    if request:
+        proto = request.headers.get("x-forwarded-proto", request.url.scheme)
+        host = request.headers.get("x-forwarded-host", request.headers.get("host", str(request.url.netloc)))
+        if host:
+            return f"{proto}://{host}".rstrip("/")
+    return "http://localhost:8000"
+
+@app.get("/api/health")
+def health_check():
+    """Health check endpoint for Docker container checks, Hostinger VPS monitoring, and uptime bots."""
+    db_status = "healthy"
+    try:
+        from database.master_connection import get_master_session
+        from sqlalchemy import text
+        session = get_master_session()
+        session.execute(text("SELECT 1"))
+        session.close()
+    except Exception as e:
+        db_status = f"degraded: {str(e)}"
+    
+    return {
+        "status": "ok",
+        "service": "Orion Online School System",
+        "version": "1.0.0",
+        "database": db_status,
+        "environment": "hostinger" if not IS_VERCEL else "vercel",
+        "timestamp": datetime.datetime.utcnow().isoformat() + "Z"
+    }
+
 # Initialize master defaults on load
 try:
     init_master_defaults()
@@ -1474,7 +1511,8 @@ def register_staff(data: dict, user=Depends(get_current_user)):
         if phone and len(phone.strip()) >= 8:
             school_name = get_branch_setting("school_name", "ORION SCHOOL SYSTEM")
             full_name = f"{first_name} {last_name}".strip() or username
-            sms_text = f"Welcome to {school_name}, {full_name}! Your {role_name} account is ready.\nUsername: {username}\nPassword: {pwd.strip()}\nAccess portal: https://orion-school.vercel.app"
+            portal_url = get_portal_url()
+            sms_text = f"Welcome to {school_name}, {full_name}! Your {role_name} account is ready.\nUsername: {username}\nPassword: {pwd.strip()}\nAccess portal: {portal_url}"
             sms_sent, _ = send_sms(phone, sms_text, trigger_type="StaffAccountCredentials")
 
         log_audit(user, "Register Staff", f"Registered staff profile for {username} ({role_name}) - SMS sent: {sms_sent}")
@@ -1573,6 +1611,7 @@ def register_staff_bulk(data: List[dict], user=Depends(get_current_user)):
         # Dispatch SMS Notifications for bulk created staff
         sms_count = 0
         school_name = get_branch_setting("school_name", "ORION SCHOOL SYSTEM")
+        portal_url = get_portal_url()
         for row in data:
             phone = row.get("phone")
             username = row.get("username").strip()
@@ -1581,7 +1620,7 @@ def register_staff_bulk(data: List[dict], user=Depends(get_current_user)):
             last_name = row.get("last_name", "")
             if phone and len(phone.strip()) >= 8:
                 full_name = f"{first_name} {last_name}".strip() or username
-                sms_text = f"Welcome to {school_name}, {full_name}! Your {role_name} account is ready.\nUsername: {username}\nPassword: Orion@123\nAccess portal: https://orion-school.vercel.app"
+                sms_text = f"Welcome to {school_name}, {full_name}! Your {role_name} account is ready.\nUsername: {username}\nPassword: Orion@123\nAccess portal: {portal_url}"
                 ok, _ = send_sms(phone, sms_text, trigger_type="StaffAccountCredentials")
                 if ok:
                     sms_count += 1
@@ -7862,7 +7901,24 @@ if web_dir.exists():
          if sd.exists():
              app.mount(f"/{subdir}", StaticFiles(directory=str(sd)), name=f"static_{subdir}")
 
+# SPA Fallback: Any unmatched route that is not /api or /uploads serves web/index.html
+@app.get("/{full_path:path}")
+def serve_spa_fallback(full_path: str):
+    if full_path.startswith("api/") or full_path.startswith("uploads/"):
+        raise HTTPException(status_code=404, detail="API endpoint or file not found")
+    
+    # Check if direct file exists in web_dir
+    candidate = web_dir / full_path
+    if candidate.exists() and candidate.is_file():
+        return FileResponse(str(candidate))
+        
+    index_path = web_dir / "index.html"
+    if index_path.exists():
+        return FileResponse(str(index_path))
+    raise HTTPException(status_code=404, detail="Page not found")
+
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("server:app", host="127.0.0.1", port=8000, reload=False)
+    from config import APP_HOST, APP_PORT
+    uvicorn.run("server:app", host=APP_HOST, port=APP_PORT, reload=False)
 

@@ -1,0 +1,37 @@
+# =============================================================================
+# Orion School Management System - Docker Compose for Hostinger VPS
+# =============================================================================
+version: '3.8'
+
+services:
+  orion-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: orion_school_app
+    restart: always
+    ports:
+      - "8000:8000"
+    environment:
+      - HOST=0.0.0.0
+      - PORT=8000
+      - DATA_DIR=/app/data
+      - UPLOADS_DIR=/app/web/uploads
+    env_file:
+      - .env
+    volumes:
+      # Persistent SQLite databases (orion_master.db, branch_*.db, etc.)
+      - ./data:/app/data
+      # Persistent uploaded media (student photos, staff signatures, receipts)
+      - ./uploads:/app/web/uploads
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"

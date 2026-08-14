@@ -8,7 +8,7 @@ Welcome to the **Orion Online School Management System**. This user manual provi
 
 ### 1.1 Accessing the Portal
 Open any modern web browser (Google Chrome, Microsoft Edge, Safari, or Mozilla Firefox) and navigate to your school's portal URL:
-👉 `https://orion-online-school-system-new.vercel.app` (or your school's dedicated domain).
+👉 `https://your-school-domain.com` (or your school's dedicated IP/domain on Hostinger).
 
 ![Login Screen Portal](/Users/a252857/Desktop/Antigravity project/Orion-Online-School-System-new/docs/screenshots/01_login_screen.png)
 
@@ -26,7 +26,7 @@ Open any modern web browser (Google Chrome, Microsoft Edge, Safari, or Mozilla F
 Orion is fully equipped as a Progressive Web App (PWA). Teachers, administrators, accountants, and parents can install the app directly onto their smartphone, tablet, or desktop home screen without downloading from app stores.
 
 #### Installing on iOS (iPhone & iPad)
-1. Open **Safari** on your iOS device and navigate to `https://orion-online-school-system-new.vercel.app`.
+1. Open **Safari** on your iOS device and navigate to your school's portal URL (e.g. `https://your-school-domain.com`).
 2. Tap the **Share** button (the `[↑]` box icon in the Safari bottom toolbar).
 3. Scroll down the menu options and select **Add to Home Screen**.
 4. Confirm the app name (**Orion SMS**) and tap **Add** in the top-right corner.
@@ -177,7 +177,7 @@ Teachers working in remote areas or classrooms with unstable Wi-Fi/cellular conn
 ## 6. Parent & Student Guide
 
 ### 6.1 Accessing the Parent Portal
-1. Open `https://orion-online-school-system-new.vercel.app` (or launch the installed Orion PWA app).
+1. Open your school's portal URL (e.g. `https://your-school-domain.com` or launch the installed Orion PWA app).
 2. Click **Request SMS Login OTP** or sign in with your registered phone number and PIN.
 3. Select your linked ward/child (if you have multiple children enrolled).
 

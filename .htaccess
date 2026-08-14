@@ -1,0 +1,77 @@
+# =============================================================================
+# Orion School Management System - Hostinger Apache / LiteSpeed Configuration
+# =============================================================================
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteBase /
+
+    # Force HTTPS (SSL)
+    RewriteCond %{HTTPS} off
+    RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+
+    # Serve PWA core files with correct headers
+    RewriteRule ^manifest\.json$ web/manifest.json [L]
+    RewriteRule ^sw\.js$ web/sw.js [L]
+    RewriteRule ^offline\.html$ web/offline.html [L]
+
+    # Serve static assets directly from /web subdirectories
+    RewriteRule ^css/(.*)$ web/css/$1 [L]
+    RewriteRule ^js/(.*)$ web/js/$1 [L]
+    RewriteRule ^assets/(.*)$ web/assets/$1 [L]
+    RewriteRule ^icons/(.*)$ web/icons/$1 [L]
+
+    # Allow direct access to existing files in web directory
+    RewriteCond %{DOCUMENT_ROOT}/web/$1 -f
+    RewriteRule ^(.*)$ web/$1 [L]
+
+    # Do not rewrite API or Upload endpoints (handled by Python backend / Passenger)
+    RewriteCond %{REQUEST_URI} ^/api [NC,OR]
+    RewriteCond %{REQUEST_URI} ^/uploads [NC]
+    RewriteRule .* - [L]
+
+    # SPA Fallback: Send all other frontend route requests to web/index.html
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteRule ^(.*)$ web/index.html [L]
+</IfModule>
+
+# --- MIME Types for Web & PWA ---
+<IfModule mod_mime.c>
+    AddType application/manifest+json .webmanifest .json
+    AddType application/javascript .js .mjs
+    AddType text/css .css
+    AddType image/svg+xml .svg .svgz
+    AddType application/font-woff2 .woff2
+    AddType application/font-woff .woff
+</IfModule>
+
+# --- Browser Caching & Performance ---
+<IfModule mod_expires.c>
+    ExpiresActive On
+    ExpiresDefault "access plus 1 month"
+    ExpiresByType text/html "access plus 0 seconds"
+    ExpiresByType application/json "access plus 0 seconds"
+    ExpiresByType application/manifest+json "access plus 0 seconds"
+    ExpiresByType application/javascript "access plus 1 week"
+    ExpiresByType text/css "access plus 1 week"
+    ExpiresByType image/png "access plus 1 month"
+    ExpiresByType image/jpeg "access plus 1 month"
+    ExpiresByType image/svg+xml "access plus 1 month"
+    ExpiresByType application/font-woff2 "access plus 1 year"
+</IfModule>
+
+# --- Service Worker Header ---
+<Files "sw.js">
+    <IfModule mod_headers.c>
+        Header set Service-Worker-Allowed "/"
+        Header set Cache-Control "no-cache, no-store, must-revalidate"
+    </IfModule>
+</Files>
+
+# --- Security Headers ---
+<IfModule mod_headers.c>
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set X-XSS-Protection "1; mode=block"
+    Header always set Referrer-Policy "strict-origin-when-cross-origin"
+</IfModule>

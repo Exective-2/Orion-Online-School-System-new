@@ -4,18 +4,13 @@ from pathlib import Path
 import sys
 
 # ---------------------------------------------------------------------------
-# Path resolution
+# Path resolution & Environment Loading
 # ---------------------------------------------------------------------------
-# When running as a PyInstaller-frozen executable (installed app), the .exe
-# lives in C:\Program Files\... which is READ-ONLY for normal users.
-# All mutable user data (database, config) must go to a writable location.
-#
-# - APP_DIR  : directory of the .exe / source root (read-only in production)
-# - DATA_DIR : writable user-data folder (always has write permission)
-#
-# Development:  both point to the project root.
-# Installed:    APP_DIR = install dir, DATA_DIR = %LOCALAPPDATA%\OrionSMS\
-# ---------------------------------------------------------------------------
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
 
 IS_VERCEL = os.environ.get("VERCEL") == "1" or os.environ.get("VERCEL_ENV") is not None
 
@@ -47,13 +42,20 @@ elif IS_VERCEL:
                 print(f"[VERCEL BOOTSTRAP] Error copying {branch_file.name}: {e}")
 else:
     APP_DIR = Path(__file__).resolve().parent
-    DATA_DIR = APP_DIR
+    env_data_dir = os.environ.get("DATA_DIR")
+    if env_data_dir:
+        DATA_DIR = Path(env_data_dir).resolve()
+    else:
+        DATA_DIR = APP_DIR
 
 # Ensure the data directory exists
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
-# Define writable UPLOADS_DIR (use /tmp/orion_data/uploads on Vercel)
-if IS_VERCEL:
+# Define writable UPLOADS_DIR
+env_uploads_dir = os.environ.get("UPLOADS_DIR")
+if env_uploads_dir:
+    UPLOADS_DIR = Path(env_uploads_dir).resolve()
+elif IS_VERCEL:
     UPLOADS_DIR = DATA_DIR / "uploads"
 else:
     UPLOADS_DIR = APP_DIR / "web" / "uploads"
@@ -64,6 +66,12 @@ UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 BASE_DIR = APP_DIR
 
 DATABASE_PATH = DATA_DIR / "school_management.db"
+
+# Server runtime settings (Hostinger VPS, Docker, Cloud hosting)
+APP_HOST = os.environ.get("HOST", "0.0.0.0")
+APP_PORT = int(os.environ.get("PORT", "8000"))
+APP_URL = os.environ.get("APP_URL") or os.environ.get("BASE_URL") or ""
+
 
 
 # Default configs
