@@ -23,7 +23,14 @@ services:
       # Persistent SQLite databases (orion_master.db, branch_*.db, etc.)
       - ./data:/app/data
       # Persistent uploaded media (student photos, staff signatures, receipts)
-      - ./uploads:/app/web/uploads
+      - ./web/uploads:/app/web/uploads
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.orion.rule=Host(`orionbasicskool.com`) || Host(`www.orionbasicskool.com`) || Host(`191.215.40.81`)"
+      - "traefik.http.routers.orion.entrypoints=web,websecure"
+      - "traefik.http.routers.orion.tls=true"
+      - "traefik.http.routers.orion.tls.certresolver=letsencrypt"
+      - "traefik.http.services.orion.loadbalancer.server.port=8000"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
       interval: 30s
@@ -35,3 +42,4 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+
