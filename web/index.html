@@ -2478,7 +2478,7 @@
                             <div class="tab-container glass-panel mt-20">
                                 <div class="tab-header">
                                     <button class="tab-btn active" data-tab="tab-announcements">School Announcements</button>
-                                    <button class="tab-btn" data-tab="tab-sms-sender">Simulated SMS Dispatcher</button>
+                                    <button class="tab-btn" data-tab="tab-sms-sender">SMS & Bulk Broadcaster</button>
                                 </div>
                                 
                                 <div class="tab-content active" id="tab-announcements">
@@ -2517,56 +2517,117 @@
                                 <div class="tab-content" id="tab-sms-sender">
                                     <div class="form-sidebar-layout">
                                         <div class="sidebar-form">
-                                            <h3>SMS dispatch panel</h3>
+                                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                                                <h3 style="margin: 0;">SMS Dispatcher</h3>
+                                                <span id="sms-recipient-badge" class="badge" style="background: rgba(37,99,235,0.18); color: #60a5fa; font-size: 11px; padding: 4px 10px; border-radius: 6px; border: 1px solid rgba(37,99,235,0.35); display: none;">
+                                                    <i class="fa-solid fa-users"></i> <span id="sms-recipient-count-text">0 recipients</span>
+                                                </span>
+                                            </div>
+
+                                            <!-- Mode Selector Buttons -->
+                                            <div class="form-group" style="margin-bottom: 15px;">
+                                                <label style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-secondary);">Dispatch Mode</label>
+                                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; background: rgba(0,0,0,0.25); padding: 4px; border-radius: 8px; border: 1px solid var(--border-glass);">
+                                                    <button type="button" id="sms-mode-bulk" class="btn btn-sm btn-primary" style="border-radius: 6px; font-weight: 600; font-size: 12px; padding: 6px 10px;">
+                                                        <i class="fa-solid fa-bullhorn"></i> Bulk SMS
+                                                    </button>
+                                                    <button type="button" id="sms-mode-single" class="btn btn-sm btn-ghost" style="border-radius: 6px; font-weight: 600; font-size: 12px; padding: 6px 10px;">
+                                                        <i class="fa-solid fa-user"></i> Single Phone
+                                                    </button>
+                                                </div>
+                                            </div>
+
                                             <form id="form-send-sms">
-                                                <div class="form-group">
-                                                    <label>Recipient Phone Number</label>
-                                                    <input type="text" id="sms-phone-input" class="form-control" placeholder="e.g. +233241234567" required>
+                                                <!-- Single Mode Fields -->
+                                                <div id="sms-single-fields" class="form-group" style="display: none;">
+                                                    <label>Recipient Phone Number <span class="text-danger">*</span></label>
+                                                    <input type="text" id="sms-phone-input" class="form-control" placeholder="e.g. +233241234567 or 0241234567">
                                                 </div>
-                                                <div class="form-group">
-                                                    <label>Message Content</label>
-                                                    <textarea id="sms-message-input" class="form-control" rows="6" maxlength="160" placeholder="Type SMS content here..." required></textarea>
-                                                    <small class="character-count" id="sms-chars-hint">0 / 160 characters</small>
+
+                                                <!-- Bulk Mode Fields -->
+                                                <div id="sms-bulk-fields">
+                                                    <div class="form-group">
+                                                        <label>Target Audience Group <span class="text-danger">*</span></label>
+                                                        <select id="sms-target-audience" class="form-control">
+                                                            <option value="all_parents">👨‍👩‍👧‍👦 All Parents (School-wide)</option>
+                                                            <option value="class_parents">🏫 Parents of Specific Class</option>
+                                                            <option value="all_staff">👨‍🏫 All Teachers & Staff Members</option>
+                                                            <option value="all_community">🌐 All Parents & Teachers (School Community)</option>
+                                                            <option value="custom_numbers">📝 Custom Phone Number List</option>
+                                                        </select>
+                                                    </div>
+
+                                                    <!-- Class Select (Conditional) -->
+                                                    <div class="form-group" id="sms-class-select-container" style="display: none;">
+                                                        <label>Select Target Class <span class="text-danger">*</span></label>
+                                                        <select id="sms-target-class" class="form-control">
+                                                            <option value="">-- Choose Class --</option>
+                                                        </select>
+                                                    </div>
+
+                                                    <!-- Custom Numbers Input (Conditional) -->
+                                                    <div class="form-group" id="sms-custom-numbers-container" style="display: none;">
+                                                        <label>Phone Numbers (Separated by commas or newlines)</label>
+                                                        <textarea id="sms-custom-numbers-input" class="form-control" rows="3" placeholder="0241234567, 0509876543, +233201122334"></textarea>
+                                                    </div>
                                                 </div>
-                                                <button type="submit" class="btn btn-success btn-block"><i class="fa-solid fa-paper-plane"></i> Send SMS</button>
+
+                                                <div class="form-group">
+                                                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                                                        <label style="margin: 0;">Message Content <span class="text-danger">*</span></label>
+                                                        <small class="character-count" id="sms-chars-hint" style="color: var(--text-secondary); font-size: 11px;">0 / 160 chars (1 unit)</small>
+                                                    </div>
+                                                    <textarea id="sms-message-input" class="form-control" rows="5" maxlength="480" placeholder="Type SMS message content to broadcast here..." required></textarea>
+                                                </div>
+
+                                                <button type="submit" id="btn-submit-sms" class="btn btn-success btn-block" style="font-weight: 600; padding: 10px;">
+                                                    <i class="fa-solid fa-paper-plane"></i> Send Bulk SMS Broadcast
+                                                </button>
                                             </form>
                                             
                                             <div class="mt-20 pt-20" style="border-top: 1px solid var(--border-glass);">
-                                                <h3>Bulk Broadcaster Alerts</h3>
-                                                <p style="font-size: 11px; color: var(--text-secondary); margin-bottom: 12px;">Dispatch automated branch-wide SMS notifications to parents.</p>
+                                                <h4 style="margin-bottom: 4px; font-size: 13px;"><i class="fa-solid fa-bolt" style="color: #f59e0b;"></i> Automated Quick Broadcasters</h4>
+                                                <p style="font-size: 11px; color: var(--text-secondary); margin-bottom: 12px;">Trigger pre-computed financial or academic SMS summaries.</p>
                                                 
                                                 <div class="form-group">
-                                                    <label>Select Target Class (Optional)</label>
-                                                    <select id="sms-broadcast-class" class="form-control">
+                                                    <label style="font-size: 11px;">Filter by Class (Optional)</label>
+                                                    <select id="sms-broadcast-class" class="form-control" style="font-size: 12px; height: 34px;">
                                                         <option value="">All Classes (School-wide)</option>
                                                     </select>
                                                 </div>
 
-                                                <div style="display: flex; flex-direction: column; gap: 10px;">
-                                                    <button type="button" class="btn btn-primary" id="btn-broadcast-fees">
-                                                        <i class="fa-solid fa-bell"></i> Dispatch Fee Reminders
+                                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                                                    <button type="button" class="btn btn-sm btn-primary" id="btn-broadcast-fees" style="font-size: 11px; padding: 7px 4px;">
+                                                        <i class="fa-solid fa-bell"></i> Fee Reminders
                                                     </button>
-                                                    <button type="button" class="btn btn-secondary" id="btn-broadcast-reports">
-                                                        <i class="fa-solid fa-file-invoice"></i> Dispatch Report Summaries
+                                                    <button type="button" class="btn btn-sm btn-secondary" id="btn-broadcast-reports" style="font-size: 11px; padding: 7px 4px;">
+                                                        <i class="fa-solid fa-file-invoice"></i> Report Summaries
                                                     </button>
                                                 </div>
                                             </div>
                                         </div>
                                         <div class="main-display">
-                                            <h3>SMS Dispatch History Logs</h3>
-                                            <table class="table" id="sms-logs-table">
-                                                <thead>
-                                                    <tr>
-                                                        <th>Timestamp</th>
-                                                        <th>Recipient Phone</th>
-                                                        <th>Message Content</th>
-                                                        <th>Status</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody>
-                                                    <tr><td colspan="4">Loading log registry...</td></tr>
-                                                </tbody>
-                                            </table>
+                                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                                                <h3 style="margin: 0;">SMS Dispatch History Logs</h3>
+                                                <button type="button" class="btn btn-sm btn-ghost" id="btn-refresh-sms-logs" style="font-size: 12px; padding: 4px 10px;">
+                                                    <i class="fa-solid fa-rotate"></i> Refresh Logs
+                                                </button>
+                                            </div>
+                                            <div class="table-responsive">
+                                                <table class="table" id="sms-logs-table">
+                                                    <thead>
+                                                        <tr>
+                                                            <th style="width: 140px;">Timestamp</th>
+                                                            <th style="width: 130px;">Recipient</th>
+                                                            <th>Message Content</th>
+                                                            <th style="width: 100px;">Status</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        <tr><td colspan="4">Loading log registry...</td></tr>
+                                                    </tbody>
+                                                </table>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>

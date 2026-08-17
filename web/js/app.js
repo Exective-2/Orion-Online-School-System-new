@@ -5617,24 +5617,133 @@ function loadCommunication() {
              });
         });
         
-    // Character count listener on SMS input
-    document.getElementById("sms-message-input").addEventListener("input", (e) => {
-         const count = e.target.value.length;
-         document.getElementById("sms-chars-hint").innerText = `${count} / 160 characters`;
-    });
+    // Character count listener on SMS input with SMS unit calculation
+    const smsMsgInput = document.getElementById("sms-message-input");
+    if (smsMsgInput) {
+        smsMsgInput.addEventListener("input", (e) => {
+             const count = e.target.value.length;
+             let units = 1;
+             if (count > 306) units = 3;
+             else if (count > 160) units = 2;
+             document.getElementById("sms-chars-hint").innerText = `${count} / 160 chars (${units} unit${units > 1 ? 's' : ''})`;
+        });
+    }
 
-    // Populate bulk broadcast class selection
+    // Populate class selections for both target audience and automated broadcaster
     apiFetch("/api/academics/classes")
         .then(classes => {
-            const select = document.getElementById("sms-broadcast-class");
-            if (select) {
-                select.innerHTML = '<option value="">All Classes (School-wide)</option>';
+            const selectBroadcaster = document.getElementById("sms-broadcast-class");
+            if (selectBroadcaster) {
+                selectBroadcaster.innerHTML = '<option value="">All Classes (School-wide)</option>';
                 classes.forEach(c => {
-                    select.innerHTML += `<option value="${c.id}">${c.name} (${c.stream || "No Stream"})</option>`;
+                    selectBroadcaster.innerHTML += `<option value="${c.id}">${c.name} (${c.stream || "No Stream"})</option>`;
+                });
+            }
+
+            const selectTargetClass = document.getElementById("sms-target-class");
+            if (selectTargetClass) {
+                selectTargetClass.innerHTML = '<option value="">-- Choose Target Class --</option>';
+                classes.forEach(c => {
+                    selectTargetClass.innerHTML += `<option value="${c.id}">${c.name} (${c.stream || "No Stream"})</option>`;
                 });
             }
         });
+
+    // Initial recipient preview update
+    updateSmsRecipientPreview();
 }
+
+let currentSmsMode = "bulk";
+
+function setSmsMode(mode) {
+    currentSmsMode = mode;
+    const btnBulk = document.getElementById("sms-mode-bulk");
+    const btnSingle = document.getElementById("sms-mode-single");
+    const bulkFields = document.getElementById("sms-bulk-fields");
+    const singleFields = document.getElementById("sms-single-fields");
+    const phoneInput = document.getElementById("sms-phone-input");
+    const submitBtn = document.getElementById("btn-submit-sms");
+
+    if (mode === "bulk") {
+        btnBulk.classList.add("btn-primary");
+        btnBulk.classList.remove("btn-ghost");
+        btnSingle.classList.add("btn-ghost");
+        btnSingle.classList.remove("btn-primary");
+        if (bulkFields) bulkFields.style.display = "block";
+        if (singleFields) singleFields.style.display = "none";
+        if (phoneInput) phoneInput.removeAttribute("required");
+        if (submitBtn) submitBtn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> Send Bulk SMS Broadcast';
+        updateSmsRecipientPreview();
+    } else {
+        btnSingle.classList.add("btn-primary");
+        btnSingle.classList.remove("btn-ghost");
+        btnBulk.classList.add("btn-ghost");
+        btnBulk.classList.remove("btn-primary");
+        if (singleFields) singleFields.style.display = "block";
+        if (bulkFields) bulkFields.style.display = "none";
+        if (phoneInput) phoneInput.setAttribute("required", "required");
+        if (submitBtn) submitBtn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> Send Single SMS';
+        const badge = document.getElementById("sms-recipient-badge");
+        if (badge) badge.style.display = "none";
+    }
+}
+
+function updateSmsRecipientPreview() {
+    if (currentSmsMode !== "bulk") {
+        const badge = document.getElementById("sms-recipient-badge");
+        if (badge) badge.style.display = "none";
+        return;
+    }
+    const audienceSelect = document.getElementById("sms-target-audience");
+    const audience = audienceSelect ? audienceSelect.value : "all_parents";
+    const classSelect = document.getElementById("sms-target-class");
+    const classId = (classSelect && classSelect.value) ? parseInt(classSelect.value) : null;
+    const customNumsInput = document.getElementById("sms-custom-numbers-input");
+    const customNums = customNumsInput ? customNumsInput.value : "";
+
+    apiFetch("/api/communication/sms/bulk/preview", {
+        method: "POST",
+        body: { target_group: audience, class_id: classId, custom_numbers: customNums }
+    }).then(res => {
+        const badge = document.getElementById("sms-recipient-badge");
+        const txt = document.getElementById("sms-recipient-count-text");
+        if (badge && txt) {
+            txt.innerText = `${res.recipient_count} recipient${res.recipient_count === 1 ? '' : 's'}`;
+            badge.style.display = "inline-flex";
+        }
+    }).catch(() => {});
+}
+
+// Mode toggle event listeners
+document.getElementById("sms-mode-bulk")?.addEventListener("click", () => setSmsMode("bulk"));
+document.getElementById("sms-mode-single")?.addEventListener("click", () => setSmsMode("single"));
+
+// Target Audience change listener
+document.getElementById("sms-target-audience")?.addEventListener("change", (e) => {
+    const val = e.target.value;
+    const classContainer = document.getElementById("sms-class-select-container");
+    const customContainer = document.getElementById("sms-custom-numbers-container");
+    const classSelect = document.getElementById("sms-target-class");
+
+    if (val === "class_parents") {
+        if (classContainer) classContainer.style.display = "block";
+        if (customContainer) customContainer.style.display = "none";
+        if (classSelect) classSelect.setAttribute("required", "required");
+    } else if (val === "custom_numbers") {
+        if (customContainer) customContainer.style.display = "block";
+        if (classContainer) classContainer.style.display = "none";
+        if (classSelect) classSelect.removeAttribute("required");
+    } else {
+        if (classContainer) classContainer.style.display = "none";
+        if (customContainer) customContainer.style.display = "none";
+        if (classSelect) classSelect.removeAttribute("required");
+    }
+    updateSmsRecipientPreview();
+});
+
+document.getElementById("sms-target-class")?.addEventListener("change", updateSmsRecipientPreview);
+document.getElementById("sms-custom-numbers-input")?.addEventListener("input", updateSmsRecipientPreview);
+document.getElementById("btn-refresh-sms-logs")?.addEventListener("click", loadCommunication);
 
 document.getElementById("form-add-announcement").addEventListener("submit", (e) => {
      e.preventDefault();
@@ -5655,21 +5764,75 @@ document.getElementById("form-add-announcement").addEventListener("submit", (e) 
 
 document.getElementById("form-send-sms").addEventListener("submit", (e) => {
      e.preventDefault();
-     const payload = {
-         phone: document.getElementById("sms-phone-input").value,
-         message: document.getElementById("sms-message-input").value
-     };
-     
-     apiFetch("/api/communication/sms", { method: "POST", body: payload })
-         .then(data => {
-              showToast("SMS dispatched successfully (Simulated)", "success");
-              document.getElementById("form-send-sms").reset();
-              loadCommunication();
-         })
-         .catch(err => showToast(err.message, "error"));
+     const msg = document.getElementById("sms-message-input").value.trim();
+     if (!msg) {
+         showToast("Please enter SMS message content", "warning");
+         return;
+     }
+
+     if (currentSmsMode === "single") {
+         const phone = document.getElementById("sms-phone-input").value.trim();
+         if (!phone) {
+             showToast("Please enter recipient phone number", "warning");
+             return;
+         }
+         apiFetch("/api/communication/sms", { method: "POST", body: { phone, message: msg } })
+             .then(() => {
+                  showToast("Single SMS dispatched successfully", "success");
+                  document.getElementById("sms-phone-input").value = "";
+                  document.getElementById("sms-message-input").value = "";
+                  loadCommunication();
+             })
+             .catch(err => showToast(err.message, "error"));
+     } else {
+         const audience = document.getElementById("sms-target-audience").value;
+         const classId = document.getElementById("sms-target-class").value;
+         const customNums = document.getElementById("sms-custom-numbers-input").value;
+
+         const audienceLabels = {
+             "all_parents": "All Parents (School-wide)",
+             "class_parents": "Parents of Selected Class",
+             "all_staff": "All Teachers & Staff Members",
+             "all_community": "All Parents & Teachers (School Community)",
+             "custom_numbers": "Custom Number List"
+         };
+         const lbl = audienceLabels[audience] || audience;
+
+         if (confirm(`Are you sure you want to broadcast this bulk SMS to ${lbl}?`)) {
+             const payload = {
+                 target_group: audience,
+                 class_id: classId ? parseInt(classId) : null,
+                 custom_numbers: customNums,
+                 message: msg
+             };
+
+             const submitBtn = document.getElementById("btn-submit-sms");
+             if (submitBtn) {
+                 submitBtn.disabled = true;
+                 submitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Broadcasting SMS...';
+             }
+
+             apiFetch("/api/communication/sms/bulk", { method: "POST", body: payload })
+                 .then(res => {
+                      showToast(res.message || `Successfully sent bulk SMS to ${res.sent_count} recipients`, "success");
+                      document.getElementById("sms-message-input").value = "";
+                      if (document.getElementById("sms-custom-numbers-input")) {
+                          document.getElementById("sms-custom-numbers-input").value = "";
+                      }
+                      loadCommunication();
+                 })
+                 .catch(err => showToast(err.message, "error"))
+                 .finally(() => {
+                      if (submitBtn) {
+                          submitBtn.disabled = false;
+                          submitBtn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> Send Bulk SMS Broadcast';
+                      }
+                 });
+         }
+     }
 });
 
-// Bulk SMS Broadcaster listeners
+// Bulk Automated Broadcaster listeners
 document.getElementById("btn-broadcast-fees").addEventListener("click", () => {
     const classId = document.getElementById("sms-broadcast-class").value;
     const payload = {
@@ -5677,7 +5840,7 @@ document.getElementById("btn-broadcast-fees").addEventListener("click", () => {
         class_id: classId ? parseInt(classId) : null
     };
     
-    if (confirm("Are you sure you want to broadcast simulated outstanding fee reminders to parents?")) {
+    if (confirm("Are you sure you want to broadcast outstanding fee reminders to parents?")) {
         apiFetch("/api/communication/sms/broadcast", { method: "POST", body: payload })
             .then(res => {
                 showToast(res.message, "success");
@@ -5694,7 +5857,7 @@ document.getElementById("btn-broadcast-reports").addEventListener("click", () =>
         class_id: classId ? parseInt(classId) : null
     };
     
-    if (confirm("Are you sure you want to broadcast simulated report card summaries to parents?")) {
+    if (confirm("Are you sure you want to broadcast report card summaries to parents?")) {
         apiFetch("/api/communication/sms/broadcast", { method: "POST", body: payload })
             .then(res => {
                 showToast(res.message, "success");

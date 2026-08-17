@@ -5197,6 +5197,133 @@ def add_announcement(data: dict, user=Depends(get_current_user)):
     finally:
         session.close()
 
+def resolve_sms_recipients(session, target_group: str, class_id: Optional[int] = None, custom_numbers: Optional[str] = None):
+    """Resolve and deduplicate recipients for SMS broadcasting.
+    Returns list of dicts: [{"phone": "+233...", "name": "...", "type": "Parent" | "Staff" | "Custom"}]
+    """
+    recipients = []
+    seen_phones = set()
+
+    def add_recipient(phone, name, r_type):
+        if not phone:
+            return
+        # Clean phone string
+        clean_phone = re.sub(r'[\s\-\(\)]', '', str(phone).strip())
+        if clean_phone and clean_phone not in seen_phones:
+            seen_phones.add(clean_phone)
+            recipients.append({
+                "phone": clean_phone,
+                "name": name.strip() if name else "Recipient",
+                "type": r_type
+            })
+
+    if target_group in ["all_parents", "class_parents", "all_community"]:
+        q = session.query(Student).filter(Student.status == "Active")
+        if target_group == "class_parents" and class_id:
+            q = q.filter(Student.class_id == class_id)
+        students = q.all()
+        for s in students:
+            if s.parent and s.parent.phone:
+                p_name = f"{s.parent.first_name} {s.parent.last_name}".strip()
+                if not p_name or p_name == "N/A":
+                    p_name = f"Parent of {s.first_name}"
+                add_recipient(s.parent.phone, p_name, "Parent")
+
+    if target_group in ["all_staff", "all_community"]:
+        staff_members = session.query(Staff).filter(Staff.status == "Active").all()
+        for st in staff_members:
+            if st.phone:
+                st_name = f"{st.first_name} {st.last_name}".strip()
+                add_recipient(st.phone, st_name, "Staff")
+
+    if target_group == "custom_numbers" and custom_numbers:
+        raw_list = re.split(r'[\r\n,;]+', str(custom_numbers))
+        for raw in raw_list:
+            raw_clean = raw.strip()
+            if raw_clean:
+                add_recipient(raw_clean, "Custom Recipient", "Custom")
+
+    return recipients
+
+@app.post("/api/communication/sms/bulk/preview")
+def preview_bulk_sms_recipients(data: dict, user=Depends(get_current_user)):
+    target_group = data.get("target_group", "all_parents")
+    class_id = data.get("class_id")
+    if class_id:
+        try:
+            class_id = int(class_id)
+        except (ValueError, TypeError):
+            class_id = None
+    custom_numbers = data.get("custom_numbers")
+    
+    session = get_session()
+    try:
+        recipients = resolve_sms_recipients(session, target_group, class_id, custom_numbers)
+        return {
+            "status": "success",
+            "target_group": target_group,
+            "recipient_count": len(recipients),
+            "recipients_sample": recipients[:10]
+        }
+    finally:
+        session.close()
+
+@app.post("/api/communication/sms/bulk")
+def send_bulk_custom_sms(data: dict, user=Depends(get_current_user)):
+    target_group = data.get("target_group", "all_parents")
+    class_id = data.get("class_id")
+    if class_id:
+        try:
+            class_id = int(class_id)
+        except (ValueError, TypeError):
+            class_id = None
+    custom_numbers = data.get("custom_numbers")
+    message = data.get("message", "").strip()
+    
+    if not message:
+        raise HTTPException(status_code=400, detail="Message content cannot be empty.")
+        
+    session = get_session()
+    try:
+        recipients = resolve_sms_recipients(session, target_group, class_id, custom_numbers)
+        if not recipients:
+            raise HTTPException(status_code=400, detail="No valid recipient phone numbers found for the selected target group.")
+            
+        sent_count = 0
+        failed_count = 0
+        
+        for r in recipients:
+            phone = r["phone"]
+            success, _ = send_sms(phone, message, trigger_type="Bulk SMS")
+            if success:
+                sent_count += 1
+            else:
+                failed_count += 1
+                
+        target_label_map = {
+            "all_parents": "All Parents",
+            "class_parents": "Class Parents",
+            "all_staff": "All Staff / Teachers",
+            "all_community": "Parents & Teachers",
+            "custom_numbers": "Custom Number List"
+        }
+        lbl = target_label_map.get(target_group, target_group)
+        log_audit(user, "Bulk SMS Dispatch", f"Broadcasted bulk SMS to {sent_count} recipient(s) ({lbl})")
+        
+        return {
+            "status": "success",
+            "sent_count": sent_count,
+            "total_recipients": len(recipients),
+            "failed_count": failed_count,
+            "message": f"Successfully sent bulk SMS to {sent_count} recipient(s)."
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        session.close()
+
 @app.post("/api/communication/sms")
 def send_custom_sms(data: dict, user=Depends(get_current_user)):
     phone = data.get("phone")
