@@ -26,8 +26,8 @@ services:
       - ./web/uploads:/app/web/uploads
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.orion.rule=Host(`orionbasicskool.com`) || Host(`www.orionbasicskool.com`) || Host(`191.215.40.81`)"
-      - "traefik.http.routers.orion.entrypoints=web,websecure"
+      - "traefik.http.routers.orion.rule=Host(`orionbasicskool.com`) || Host(`www.orionbasicskool.com`)"
+      - "traefik.http.routers.orion.entrypoints=websecure"
       - "traefik.http.routers.orion.tls=true"
       - "traefik.http.routers.orion.tls.certresolver=letsencrypt"
       - "traefik.http.services.orion.loadbalancer.server.port=8000"

@@ -30,7 +30,10 @@ from database.models import (
 from database.seed import hash_password, seed_database
 from config import config, DATA_DIR, APP_DIR, UPLOADS_DIR, IS_VERCEL, save_config
 from utils.sms_sender import send_sms
-from utils.branch_config import get_branch_setting, set_branch_setting, get_active_year_id, get_active_term_id
+from utils.branch_config import (
+    get_branch_setting, set_branch_setting, get_active_year_id, get_active_term_id,
+    get_active_branch_prefix, generate_next_student_id
+)
 from utils.pdf_generator import (
     generate_student_id_card, generate_admission_form, generate_fee_receipt,
     generate_report_card, generate_class_report_cards, generate_class_report_cards_zip, generate_financial_statement,
@@ -916,16 +919,9 @@ def admit_student(data: dict, user=Depends(get_current_user)):
         session.add(parent)
         session.flush()
         
-        # Determine student ID with tagline prefix
-        tagline = config.get("school_tagline", "ORION").strip().upper() or "ORION"
-        tagline = re.sub(r'[^A-Z0-9]', '', tagline) or "ORION"
-        year_suffix = datetime.datetime.now().strftime("%y")
-        random_num = hashlib.sha256(os.urandom(16)).hexdigest()[:4].upper()
+        # Determine student ID with school branch prefix
         custom_id = data.get("id") or data.get("student_id")
-        if custom_id:
-            student_id = custom_id.strip()
-        else:
-            student_id = f"{tagline}-{year_suffix}-{random_num}"
+        student_id = generate_next_student_id(session, user=user, custom_id=custom_id)
         
         dob = None
         if data.get("dob"):
@@ -1002,8 +998,6 @@ def admit_students_bulk(data: List[dict], user=Depends(get_current_user)):
         if errors:
             raise HTTPException(status_code=400, detail="Validation errors:\n" + "\n".join(errors))
             
-        year_suffix = datetime.datetime.now().strftime("%y")
-        
         for row in data:
             parent_data = row.get("parent", {})
             parent = Parent(
@@ -1017,8 +1011,8 @@ def admit_students_bulk(data: List[dict], user=Depends(get_current_user)):
             session.add(parent)
             session.flush()
             
-            random_num = hashlib.sha256(os.urandom(16)).hexdigest()[:4].upper()
-            student_id = f"OS-{year_suffix}-{random_num}"
+            custom_id = row.get("id") or row.get("student_id")
+            student_id = generate_next_student_id(session, user=user, custom_id=custom_id)
             
             dob = datetime.datetime.strptime(row["dob"], "%Y-%m-%d").date()
             class_name = row.get("class_name")
@@ -2048,12 +2042,70 @@ def get_current_academic_info(user=Depends(get_current_user)):
     finally:
         session.close()
 
+def calculate_academic_terms(start_date: datetime.date, end_date: datetime.date):
+    """
+    Computes balanced start and end dates for Term 1, Term 2, and Term 3
+    within an academic year spanning [start_date, end_date].
+    """
+    total_days = (end_date - start_date).days
+    if total_days < 3:
+        raise ValueError("Academic year date range is too short (must be at least 3 days).")
+
+    if total_days >= 30:
+        # Standard calendar with holiday intervals
+        break_days = max(7, min(21, int(total_days * 0.05)))
+        rem_days = total_days - (2 * break_days)
+        term_len = rem_days // 3
+        
+        t1_start = start_date
+        t1_end = t1_start + datetime.timedelta(days=term_len)
+        
+        t2_start = t1_end + datetime.timedelta(days=break_days)
+        t2_end = t2_start + datetime.timedelta(days=term_len)
+        
+        t3_start = t2_end + datetime.timedelta(days=break_days)
+        t3_end = end_date
+    else:
+        # Short session fallback
+        part = max(1, total_days // 3)
+        t1_start = start_date
+        t1_end = min(t1_start + datetime.timedelta(days=part), end_date)
+        
+        t2_start = min(t1_end + datetime.timedelta(days=1), end_date)
+        t2_end = min(t2_start + datetime.timedelta(days=part), end_date)
+        
+        t3_start = min(t2_end + datetime.timedelta(days=1), end_date)
+        t3_end = end_date
+        
+    return [
+        {"name": "Term 1", "start_date": t1_start, "end_date": t1_end},
+        {"name": "Term 2", "start_date": t2_start, "end_date": t2_end},
+        {"name": "Term 3", "start_date": t3_start, "end_date": t3_end},
+    ]
+
 @app.get("/api/academics/years")
 def get_years(user=Depends(get_current_user)):
     session = get_session()
     try:
-        years = session.query(AcademicYear).all()
-        return [{"id": y.id, "name": y.name, "is_current": y.is_current} for y in years]
+        years = session.query(AcademicYear).order_by(AcademicYear.start_date.desc()).all()
+        return [
+            {
+                "id": y.id,
+                "name": y.name,
+                "start_date": str(y.start_date) if y.start_date else "",
+                "end_date": str(y.end_date) if y.end_date else "",
+                "is_current": y.is_current,
+                "terms": [
+                    {
+                        "id": t.id,
+                        "name": t.name,
+                        "start_date": str(t.start_date) if t.start_date else "",
+                        "end_date": str(t.end_date) if t.end_date else "",
+                        "is_current": t.is_current
+                    } for t in y.terms
+                ]
+            } for y in years
+        ]
     finally:
         session.close()
 
@@ -2071,15 +2123,75 @@ def add_year(data: dict, user=Depends(get_current_user)):
 
         start = datetime.datetime.strptime(data["start_date"], "%Y-%m-%d").date()
         end = datetime.datetime.strptime(data["end_date"], "%Y-%m-%d").date()
+        if end <= start:
+            raise HTTPException(status_code=400, detail="End date must be after start date.")
+
         is_curr = bool(data.get("is_current", False))
         
         if is_curr:
             session.query(AcademicYear).update({AcademicYear.is_current: False})
+            session.query(Term).update({Term.is_current: False})
             
         year = AcademicYear(name=name, start_date=start, end_date=end, is_current=is_curr)
         session.add(year)
+        session.flush()
+
+        # Auto-create or process the 3 terms
+        terms_payload = data.get("terms")
+        created_terms = []
+        if terms_payload and isinstance(terms_payload, list) and len(terms_payload) > 0:
+            for idx, t_data in enumerate(terms_payload):
+                t_name = (t_data.get("name") or f"Term {idx+1}").strip()
+                t_start = datetime.datetime.strptime(t_data["start_date"], "%Y-%m-%d").date()
+                t_end = datetime.datetime.strptime(t_data["end_date"], "%Y-%m-%d").date()
+                t_curr = bool(t_data.get("is_current", False)) or (is_curr and idx == 0)
+                term_obj = Term(academic_year_id=year.id, name=t_name, start_date=t_start, end_date=t_end, is_current=t_curr)
+                session.add(term_obj)
+                created_terms.append(term_obj)
+        else:
+            default_terms = calculate_academic_terms(start, end)
+            for idx, dt in enumerate(default_terms):
+                t_curr = is_curr and (idx == 0)
+                term_obj = Term(
+                    academic_year_id=year.id,
+                    name=dt["name"],
+                    start_date=dt["start_date"],
+                    end_date=dt["end_date"],
+                    is_current=t_curr
+                )
+                session.add(term_obj)
+                created_terms.append(term_obj)
+
+        session.flush()
+
+        if is_curr:
+            set_branch_setting("active_academic_year_id", year.id, session=session)
+            if created_terms:
+                active_term = next((t for t in created_terms if t.is_current), created_terms[0])
+                active_term.is_current = True
+                set_branch_setting("active_term_id", active_term.id, session=session)
+
         session.commit()
-        return {"status": "success"}
+        return {
+            "status": "success",
+            "message": f"Academic year '{name}' and 3 terms created successfully.",
+            "year": {
+                "id": year.id,
+                "name": year.name,
+                "start_date": str(year.start_date),
+                "end_date": str(year.end_date),
+                "is_current": year.is_current
+            },
+            "terms": [
+                {
+                    "id": t.id,
+                    "name": t.name,
+                    "start_date": str(t.start_date),
+                    "end_date": str(t.end_date),
+                    "is_current": t.is_current
+                } for t in created_terms
+            ]
+        }
     except HTTPException:
         session.rollback()
         raise
@@ -2094,13 +2206,26 @@ def set_current_year(year_id: int, user=Depends(get_current_user)):
     session = get_session()
     try:
         session.query(AcademicYear).update({AcademicYear.is_current: False})
+        session.query(Term).update({Term.is_current: False})
+        
         year = session.query(AcademicYear).filter(AcademicYear.id == year_id).first()
-        if year:
-            year.is_current = True
+        if not year:
+            raise HTTPException(status_code=404, detail="Academic year not found.")
             
+        year.is_current = True
         set_branch_setting("active_academic_year_id", year_id, session=session)
+
+        # Activate the first term of this year (or Term 1)
+        first_term = session.query(Term).filter(Term.academic_year_id == year_id).order_by(Term.start_date.asc(), Term.name.asc()).first()
+        if first_term:
+            first_term.is_current = True
+            set_branch_setting("active_term_id", first_term.id, session=session)
+
         session.commit()
         return {"status": "success"}
+    except HTTPException:
+        session.rollback()
+        raise
     except Exception as e:
         session.rollback()
         raise HTTPException(status_code=500, detail=str(e))
@@ -2111,12 +2236,15 @@ def set_current_year(year_id: int, user=Depends(get_current_user)):
 def get_terms(user=Depends(get_current_user)):
     session = get_session()
     try:
-        terms = session.query(Term).all()
+        terms = session.query(Term).join(AcademicYear).order_by(AcademicYear.start_date.desc(), Term.start_date.asc(), Term.name.asc()).all()
         return [
             {
                 "id": t.id,
                 "name": t.name,
+                "academic_year_id": t.academic_year_id,
                 "year_name": t.academic_year.name if t.academic_year else "N/A",
+                "start_date": str(t.start_date) if t.start_date else "",
+                "end_date": str(t.end_date) if t.end_date else "",
                 "is_current": t.is_current
             } for t in terms
         ]
@@ -2138,6 +2266,9 @@ def add_term(data: dict, user=Depends(get_current_user)):
 
         start = datetime.datetime.strptime(data["start_date"], "%Y-%m-%d").date()
         end = datetime.datetime.strptime(data["end_date"], "%Y-%m-%d").date()
+        if end <= start:
+            raise HTTPException(status_code=400, detail="End date must be after start date.")
+
         is_curr = bool(data.get("is_current", False))
         
         if is_curr:
@@ -2145,6 +2276,15 @@ def add_term(data: dict, user=Depends(get_current_user)):
             
         term = Term(academic_year_id=year_id, name=name, start_date=start, end_date=end, is_current=is_curr)
         session.add(term)
+        session.flush()
+
+        if is_curr:
+            set_branch_setting("active_term_id", term.id, session=session)
+            if term.academic_year:
+                session.query(AcademicYear).update({AcademicYear.is_current: False})
+                term.academic_year.is_current = True
+                set_branch_setting("active_academic_year_id", term.academic_year.id, session=session)
+
         session.commit()
         return {"status": "success"}
     except HTTPException:
@@ -2162,12 +2302,23 @@ def set_current_term(term_id: int, user=Depends(get_current_user)):
     try:
         session.query(Term).update({Term.is_current: False})
         term = session.query(Term).filter(Term.id == term_id).first()
-        if term:
-            term.is_current = True
+        if not term:
+            raise HTTPException(status_code=404, detail="Term not found.")
             
+        term.is_current = True
         set_branch_setting("active_term_id", term_id, session=session)
+
+        # Ensure parent academic year is set active
+        if term.academic_year:
+            session.query(AcademicYear).update({AcademicYear.is_current: False})
+            term.academic_year.is_current = True
+            set_branch_setting("active_academic_year_id", term.academic_year.id, session=session)
+
         session.commit()
         return {"status": "success"}
+    except HTTPException:
+        session.rollback()
+        raise
     except Exception as e:
         session.rollback()
         raise HTTPException(status_code=500, detail=str(e))
@@ -5439,7 +5590,7 @@ def get_school_profile(request: Request, user=Depends(get_current_user)):
         return {
             "school_name": get_branch_setting("school_name", ""),
             "school_motto": get_branch_setting("school_motto", ""),
-            "school_tagline": get_branch_setting("school_tagline", "ORION"),
+            "school_tagline": get_branch_setting("school_tagline", None) or get_active_branch_prefix(user=user),
             "school_email": get_branch_setting("school_email", ""),
             "school_phone": get_branch_setting("school_phone", ""),
             "school_address": get_branch_setting("school_address", ""),
@@ -5465,7 +5616,7 @@ def get_school_profile(request: Request, user=Depends(get_current_user)):
 
 @app.put("/api/settings/school-profile")
 def update_school_profile(data: dict, user=Depends(get_current_user)):
-    for key in ["school_motto", "school_tagline", "school_email", "school_phone", "school_address", "gps_address", "school_logo", "curriculum", "currency", "theme", "max_class_score", "max_exam_score"]:
+    for key in ["school_motto", "school_tagline", "branch_prefix", "school_email", "school_phone", "school_address", "gps_address", "school_logo", "curriculum", "currency", "theme", "max_class_score", "max_exam_score"]:
         if key in data:
             set_branch_setting(key, data[key])
             
@@ -5766,7 +5917,8 @@ def sysadmin_create_branch(req: BranchCreate, user=Depends(get_current_user)):
                 set_branch_setting("school_email", req.email or "", session=b_session)
                 set_branch_setting("school_address", req.address or "", session=b_session)
                 set_branch_setting("school_motto", "", session=b_session)
-                set_branch_setting("school_tagline", "", session=b_session)
+                set_branch_setting("school_tagline", req.code.upper().strip(), session=b_session)
+                set_branch_setting("branch_prefix", req.code.upper().strip(), session=b_session)
                 set_branch_setting("school_logo", "", session=b_session)
                 set_branch_setting("headteacher_signature", "", session=b_session)
                 set_branch_setting("curriculum", "GES", session=b_session)

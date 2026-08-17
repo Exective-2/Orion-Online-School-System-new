@@ -2460,7 +2460,8 @@ function loadAcademicCalendar() {
             
             years.forEach(y => {
                 const badge = y.is_current ? '<span class="badge badge-branch">Current</span>' : `<button class="btn btn-secondary btn-xs btn-set-current-year" data-id="${y.id}">Set Active</button>`;
-                list.innerHTML += `<li><strong>${y.name}</strong> ${badge}</li>`;
+                const dates = (y.start_date && y.end_date) ? `<br><small class="text-muted" style="font-size:11px;"><i class="fa-regular fa-calendar"></i> ${y.start_date} to ${y.end_date}</small>` : '';
+                list.innerHTML += `<li style="display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid rgba(255,255,255,0.05);"><div><strong>${y.name}</strong>${dates}</div> <div>${badge}</div></li>`;
                 select.innerHTML += `<option value="${y.id}">${y.name}</option>`;
             });
             
@@ -2470,11 +2471,12 @@ function loadAcademicCalendar() {
                     const yid = btn.getAttribute("data-id");
                     apiFetch(`/api/academics/years/${yid}/set-current`, { method: "POST" })
                         .then(() => {
-                            showToast("Academic year updated successfully", "success");
+                            showToast("Active academic session updated successfully", "success");
                             loadAcademicCalendar();
                             // Update header info dynamically
                             updateHeaderAcademicBadge();
-                        });
+                        })
+                        .catch(err => showToast(err.message, "error"));
                 });
             });
         });
@@ -2486,7 +2488,8 @@ function loadAcademicCalendar() {
             list.innerHTML = "";
             terms.forEach(t => {
                 const badge = t.is_current ? '<span class="badge badge-academic">Current</span>' : `<button class="btn btn-secondary btn-xs btn-set-current-term" data-id="${t.id}">Set Active</button>`;
-                list.innerHTML += `<li><strong>${t.name}</strong> (${t.year_name}) ${badge}</li>`;
+                const dates = (t.start_date && t.end_date) ? `<br><small class="text-muted" style="font-size:11px;"><i class="fa-regular fa-clock"></i> ${t.start_date} to ${t.end_date}</small>` : '';
+                list.innerHTML += `<li style="display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid rgba(255,255,255,0.05);"><div><strong>${t.name}</strong> <span class="text-muted" style="font-size:12px;">(${t.year_name})</span>${dates}</div> <div>${badge}</div></li>`;
             });
             
             document.querySelectorAll(".btn-set-current-term").forEach(btn => {
@@ -2494,10 +2497,11 @@ function loadAcademicCalendar() {
                     const tid = btn.getAttribute("data-id");
                     apiFetch(`/api/academics/terms/${tid}/set-current`, { method: "POST" })
                         .then(() => {
-                            showToast("Term updated successfully", "success");
+                            showToast("Active term updated successfully", "success");
                             loadAcademicCalendar();
                             updateHeaderAcademicBadge();
-                        });
+                        })
+                        .catch(err => showToast(err.message, "error"));
                 });
             });
         });
@@ -2512,8 +2516,8 @@ document.getElementById("form-add-year").addEventListener("submit", (e) => {
         is_current: false
     };
     apiFetch("/api/academics/years", { method: "POST", body: payload })
-        .then(() => {
-            showToast("Academic year added", "success");
+        .then(res => {
+            showToast(res.message || "Academic year and 3 terms created successfully", "success");
             document.getElementById("form-add-year").reset();
             loadAcademicCalendar();
         })
@@ -2531,7 +2535,7 @@ document.getElementById("form-add-term").addEventListener("submit", (e) => {
     };
     apiFetch("/api/academics/terms", { method: "POST", body: payload })
         .then(() => {
-            showToast("Term added", "success");
+            showToast("Term added successfully", "success");
             document.getElementById("form-add-term").reset();
             loadAcademicCalendar();
         })

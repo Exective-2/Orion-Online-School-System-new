@@ -167,26 +167,41 @@ def add_pdf_header(story, title_text=None):
     school_address = get_branch_setting("school_address", "") or ""
     gps_address = get_branch_setting("gps_address", "") or ""
     
-    # Styles
+    align_val = 0 if logo_exists else 1
+
+    # Distinct header styles with proper leading and spacing to prevent text collisions
     name_style = ParagraphStyle(
-        'SName',
+        'HeaderSchoolName',
         fontName='Helvetica-Bold',
-        fontSize=18,
-        alignment=0 if logo_exists else 1,
-        textColor=colors.HexColor("#2563eb")
+        fontSize=16,
+        leading=20,
+        spaceAfter=2,
+        alignment=align_val,
+        textColor=colors.HexColor("#1d4ed8")
     )
-    details_style = ParagraphStyle(
-        'SDetails',
-        fontName='Helvetica',
-        fontSize=9,
-        alignment=0 if logo_exists else 1,
+    motto_style = ParagraphStyle(
+        'HeaderSchoolMotto',
+        fontName='Helvetica-Oblique',
+        fontSize=9.5,
+        leading=13,
+        spaceAfter=3,
+        alignment=align_val,
         textColor=colors.HexColor("#475569")
+    )
+    contact_style = ParagraphStyle(
+        'HeaderSchoolContact',
+        fontName='Helvetica',
+        fontSize=8.5,
+        leading=12,
+        spaceAfter=0,
+        alignment=align_val,
+        textColor=colors.HexColor("#64748b")
     )
     
     info_layout = []
     info_layout.append(Paragraph(school_name.upper(), name_style))
     if school_motto:
-        info_layout.append(Paragraph(f"<i>{school_motto}</i>", details_style))
+        info_layout.append(Paragraph(f"<i>{school_motto}</i>", motto_style))
     
     contact_parts = []
     if school_address:
@@ -199,54 +214,58 @@ def add_pdf_header(story, title_text=None):
         contact_parts.append(f"Email: {school_email}")
         
     if contact_parts:
-        info_layout.append(Paragraph(" | ".join(contact_parts), details_style))
+        info_layout.append(Paragraph(" | ".join(contact_parts), contact_style))
         
     if logo_exists:
         try:
-            img = Image(logo_file, width=50, height=50)
+            img = Image(logo_file, width=54, height=54)
             img.hAlign = 'LEFT'
             
-            header_table = Table([[img, info_layout]], colWidths=[60, 480])
+            header_table = Table([[img, info_layout]], colWidths=[65, 475])
             header_table.setStyle(TableStyle([
                 ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-                ('LEFTPADDING', (0,0), (-1,-1), 0),
-                ('RIGHTPADDING', (0,0), (-1,-1), 0),
+                ('LEFTPADDING', (0,0), (0,0), 0),
+                ('RIGHTPADDING', (0,0), (0,0), 10),
+                ('LEFTPADDING', (1,0), (1,0), 4),
+                ('RIGHTPADDING', (1,0), (1,0), 0),
                 ('BOTTOMPADDING', (0,0), (-1,-1), 0),
                 ('TOPPADDING', (0,0), (-1,-1), 0),
             ]))
             story.append(header_table)
         except Exception as e:
-            print(f"Error copying logo in PDF: {e}")
+            print(f"Error embedding logo in PDF: {e}")
             story.append(Paragraph(school_name.upper(), name_style))
             if school_motto:
-                story.append(Paragraph(f"<i>{school_motto}</i>", details_style))
-            story.append(Paragraph(" | ".join(contact_parts), details_style))
+                story.append(Paragraph(f"<i>{school_motto}</i>", motto_style))
+            if contact_parts:
+                story.append(Paragraph(" | ".join(contact_parts), contact_style))
     else:
         story.append(Paragraph(school_name.upper(), name_style))
         if school_motto:
-            story.append(Paragraph(f"<i>{school_motto}</i>", details_style))
+            story.append(Paragraph(f"<i>{school_motto}</i>", motto_style))
         if contact_parts:
-            story.append(Paragraph(" | ".join(contact_parts), details_style))
+            story.append(Paragraph(" | ".join(contact_parts), contact_style))
             
-    story.append(Spacer(1, 10))
-    # Horizontal separator line
-    sep = Table([[""]], colWidths=[540], rowHeights=[1])
+    story.append(Spacer(1, 8))
+    # Elegant horizontal accent separator line
+    sep = Table([[""]], colWidths=[540], rowHeights=[1.5])
     sep.setStyle(TableStyle([
-        ('LINEABOVE', (0,0), (-1,-1), 1, colors.HexColor("#cbd5e1")),
+        ('LINEABOVE', (0,0), (-1,-1), 1.5, colors.HexColor("#cbd5e1")),
         ('TOPPADDING', (0,0), (-1,-1), 0),
         ('BOTTOMPADDING', (0,0), (-1,-1), 0),
     ]))
     story.append(sep)
-    story.append(Spacer(1, 15))
+    story.append(Spacer(1, 12))
     
     if title_text:
         title_style = ParagraphStyle(
             'DocTitle',
             fontName='Helvetica-Bold',
-            fontSize=13,
+            fontSize=12.5,
+            leading=16,
             alignment=1,
-            textColor=colors.HexColor("#1e293b"),
-            spaceAfter=15
+            textColor=colors.HexColor("#0f172a"),
+            spaceAfter=14
         )
         story.append(Paragraph(title_text.upper(), title_style))
 

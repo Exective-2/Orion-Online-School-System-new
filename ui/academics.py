@@ -781,21 +781,35 @@ class AddAcademicYearDialog(QDialog):
             session.flush()
             
             # Setup standard three terms automatically
-            t1_s = ay.start_date
-            t1_e = t1_s + datetime.timedelta(days=108)
-            t2_s = t1_e + datetime.timedelta(days=18)
-            t2_e = t2_s + datetime.timedelta(days=90)
-            t3_s = t2_e + datetime.timedelta(days=26)
-            t3_e = ay.end_date
+            total_days = (ay.end_date - ay.start_date).days
+            if total_days >= 30:
+                break_days = max(7, min(21, int(total_days * 0.05)))
+                rem_days = total_days - (2 * break_days)
+                term_len = rem_days // 3
+                
+                t1_s = ay.start_date
+                t1_e = t1_s + datetime.timedelta(days=term_len)
+                t2_s = t1_e + datetime.timedelta(days=break_days)
+                t2_e = t2_s + datetime.timedelta(days=term_len)
+                t3_s = t2_e + datetime.timedelta(days=break_days)
+                t3_e = ay.end_date
+            else:
+                part = max(1, total_days // 3)
+                t1_s = ay.start_date
+                t1_e = min(t1_s + datetime.timedelta(days=part), ay.end_date)
+                t2_s = min(t1_e + datetime.timedelta(days=1), ay.end_date)
+                t2_e = min(t2_s + datetime.timedelta(days=part), ay.end_date)
+                t3_s = min(t2_e + datetime.timedelta(days=1), ay.end_date)
+                t3_e = ay.end_date
             
-            term1 = Term(academic_year_id=ay.id, name="Term 1", start_date=t1_s, end_date=t1_e)
-            term2 = Term(academic_year_id=ay.id, name="Term 2", start_date=t2_s, end_date=t2_e)
-            term3 = Term(academic_year_id=ay.id, name="Term 3", start_date=t3_s, end_date=t3_e)
+            term1 = Term(academic_year_id=ay.id, name="Term 1", start_date=t1_s, end_date=t1_e, is_current=False)
+            term2 = Term(academic_year_id=ay.id, name="Term 2", start_date=t2_s, end_date=t2_e, is_current=False)
+            term3 = Term(academic_year_id=ay.id, name="Term 3", start_date=t3_s, end_date=t3_e, is_current=False)
             
             session.add_all([term1, term2, term3])
             session.commit()
             
-            QMessageBox.information(self, "Success", f"Academic Year {name} and default terms created successfully.")
+            QMessageBox.information(self, "Success", f"Academic Year {name} and default 3 terms created successfully.")
             self.data_changed.emit()
             self.accept()
         except Exception as e:

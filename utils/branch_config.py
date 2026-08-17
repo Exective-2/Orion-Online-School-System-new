@@ -1,3 +1,7 @@
+import os
+import re
+import hashlib
+import datetime
 import json
 from database.connection import get_session
 from database.models import SystemSetting
@@ -7,8 +11,86 @@ BRANCH_PROFILE_KEYS = {
     "school_name", "school_motto", "school_tagline", "school_email", 
     "school_phone", "school_address", "gps_address", "school_logo", "school_logo_base64", 
     "headteacher_signature", "headteacher_signature_base64", 
-    "curriculum", "currency", "theme", "max_class_score", "max_exam_score"
+    "curriculum", "currency", "theme", "max_class_score", "max_exam_score",
+    "branch_prefix"
 }
+
+def get_active_branch_prefix(user=None, session=None) -> str:
+    """Determine the branch prefix to be used for generating student IDs.
+    
+    Resolution order:
+    1. 'school_tagline' or 'branch_prefix' stored in the branch's system_settings table.
+    2. Branch 'code' from master database using user['branch_id'] or active branch context.
+    3. Global config 'school_tagline' or 'branch_code' or 'branch_prefix'.
+    4. Default fallback: 'ORION'.
+    """
+    # 1. Branch database settings
+    try:
+        tagline = get_branch_setting("school_tagline", None, session=session)
+        if not tagline:
+            tagline = get_branch_setting("branch_prefix", None, session=session)
+        if tagline and str(tagline).strip():
+            clean = re.sub(r'[^A-Za-z0-9]', '', str(tagline).strip()).upper()
+            if clean:
+                return clean
+    except Exception:
+        pass
+
+    # 2. Master DB Branch record
+    try:
+        branch_id = None
+        if user and isinstance(user, dict) and user.get("branch_id"):
+            branch_id = user.get("branch_id")
+        else:
+            from database.branch_context import get_active_branch_id
+            branch_id = get_active_branch_id()
+
+        if branch_id:
+            from database.master_connection import get_master_session
+            from database.master_models import Branch
+            m_session = get_master_session()
+            try:
+                branch = m_session.query(Branch).filter(Branch.id == branch_id).first()
+                if branch and branch.code:
+                    clean_code = re.sub(r'[^A-Za-z0-9]', '', str(branch.code).strip()).upper()
+                    if clean_code:
+                        return clean_code
+            finally:
+                m_session.close()
+    except Exception:
+        pass
+
+    # 3. Global config
+    cfg_val = config.get("school_tagline") or config.get("branch_code") or config.get("branch_prefix")
+    if cfg_val and str(cfg_val).strip():
+        clean_cfg = re.sub(r'[^A-Za-z0-9]', '', str(cfg_val).strip()).upper()
+        if clean_cfg:
+            return clean_cfg
+
+    return "ORION"
+
+def generate_next_student_id(session, user=None, custom_id=None) -> str:
+    """Generates a unique student ID prefixed with the active branch prefix.
+    Format: {PREFIX}-{YY}-{RANDOM_HEX_4}
+    Ensures that the generated ID does not collide with existing student records in the branch.
+    """
+    if custom_id and str(custom_id).strip():
+        return str(custom_id).strip()
+
+    from database.models import Student
+    prefix = get_active_branch_prefix(user=user, session=session)
+    year_suffix = datetime.datetime.now().strftime("%y")
+
+    for _ in range(30):
+        rand_code = hashlib.sha256(os.urandom(16)).hexdigest()[:4].upper()
+        candidate = f"{prefix}-{year_suffix}-{rand_code}"
+        exists = session.query(Student.id).filter(Student.id == candidate).first()
+        if not exists:
+            return candidate
+
+    # In case of high collision density, append timestamp component
+    ts_suffix = str(int(datetime.datetime.now().timestamp()))[-4:]
+    return f"{prefix}-{year_suffix}-{ts_suffix}"
 
 def get_branch_setting(key: str, default=None, session=None):
     """Retrieve a setting value for the current active branch database session.

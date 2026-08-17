@@ -8,6 +8,7 @@ from PySide6.QtCore import Qt, QDate, Signal
 from database.connection import get_session
 from database.models import Student, Parent, Class
 from utils.pdf_generator import generate_student_id_card, generate_admission_form
+from utils.branch_config import generate_next_student_id, get_active_branch_prefix
 import datetime
 
 class StudentsPanel(QWidget):
@@ -490,7 +491,7 @@ class StudentsPanel(QWidget):
                 if other_names == 'nan':
                     other_names = None
                     
-                student_id = f"SMS-{year}-{(current_count + imported_count + 1):04d}"
+                student_id = generate_next_student_id(session)
                 
                 new_student = Student(
                     id=student_id,
@@ -784,10 +785,8 @@ class AdmitStudentDialog(QDialog):
             
         session = get_session()
         try:
-            # Autogenerate Unique student ID: SMS-{YEAR}-{NEXT_INDEX:04d}
-            year = datetime.datetime.now().year
-            count = session.query(Student).count()
-            student_id = f"SMS-{year}-{(count + 1):04d}"
+            # Autogenerate Unique student ID with branch prefix
+            student_id = generate_next_student_id(session)
             
             dob_qdate = self.dob_input.date()
             dob_date = datetime.date(dob_qdate.year(), dob_qdate.month(), dob_qdate.day())
